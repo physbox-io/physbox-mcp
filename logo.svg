@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <!-- Cyan to Blue Gradient (userSpaceOnUse to support vertical/horizontal lines) -->
+    <linearGradient id="grad-cyan-blue" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="100%" stop-color="#4facfe" />
+    </linearGradient>
+    <!-- Blue to Purple Gradient (userSpaceOnUse to support vertical/horizontal lines) -->
+    <linearGradient id="grad-blue-purple" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    
+    <!-- Semi-transparent Face Gradients for Glassmorphic Depth -->
+    <linearGradient id="face-top-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.15" />
+    </linearGradient>
+    <linearGradient id="face-left-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#1d4ed8" stop-opacity="0.25" />
+    </linearGradient>
+    <linearGradient id="face-right-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.20" />
+      <stop offset="100%" stop-color="#4f46e5" stop-opacity="0.20" />
+    </linearGradient>
+
+    <!-- Glowing Drop Shadow for 3D depth and pop (userSpaceOnUse prevents vanishing vertical/horizontal lines) -->
+    <filter id="glow" filterUnits="userSpaceOnUse" x="-50" y="-50" width="612" height="612">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#3b82f6" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- 3D Isometric Faces (Fills) -->
+  <polygon points="256,120 386,195 256,270 126,195" fill="url(#face-top-grad)" />
+  <polygon points="126,195 256,270 256,450 126,375" fill="url(#face-left-grad)" />
+  <polygon points="256,270 386,195 386,375 256,450" fill="url(#face-right-grad)" />
+
+  <!-- Thin Mesh Subdivision / Wireframe Lines (Internal Detail) -->
+  <g stroke="url(#grad-cyan-blue)" stroke-width="4.5" stroke-opacity="0.75" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Top Face Grid -->
+    <line x1="256" y1="120" x2="256" y2="270" />
+    <line x1="126" y1="195" x2="386" y2="195" />
+
+    <!-- Left Face Grid/Diagonals -->
+    <line x1="126" y1="195" x2="256" y2="450" />
+    <line x1="256" y1="270" x2="126" y2="375" />
+    <line x1="126" y1="285" x2="256" y2="360" />
+    <line x1="191" y1="232.5" x2="191" y2="412.5" />
+
+    <!-- Right Face Grid/Diagonals -->
+    <line x1="256" y1="270" x2="386" y2="375" />
+    <line x1="386" y1="195" x2="256" y2="450" />
+    <line x1="256" y1="360" x2="386" y2="285" />
+    <line x1="321" y1="232.5" x2="321" y2="412.5" />
+
+    <!-- Left Ear/Bolt -->
+    <line x1="126" y1="195" x2="96" y2="178" stroke-width="6" />
+
+    <!-- Right Ear/Bolt -->
+    <line x1="386" y1="195" x2="416" y2="178" stroke-width="6" />
+  </g>
+
+  <!-- Thick Outer Boundary and Inner Main Edges (The 3D Structure) -->
+  <g stroke="url(#grad-blue-purple)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <!-- Outer boundary of the robot head -->
+    <polygon points="256,120 386,195 386,375 256,450 126,375 126,195" fill="none" />
+    <!-- Inner main edges from center vertex -->
+    <line x1="256" y1="270" x2="256" y2="450" />
+    <line x1="256" y1="270" x2="126" y2="195" />
+    <line x1="256" y1="270" x2="386" y2="195" />
+  </g>
+
+  <!-- Layer 1 Node: The back top corner (256, 120) which is physically behind the antenna rod -->
+  <g fill="#ffffff">
+    <circle cx="256" cy="120" r="10" stroke="#7c3aed" stroke-width="4" />
+  </g>
+
+  <!-- Layer 2: Antenna Rod (Drawn on top of the back-corner node to show it's in front of it) -->
+  <line x1="256" y1="195" x2="256" y2="50" stroke="url(#grad-blue-purple)" stroke-width="11" stroke-linecap="round" filter="url(#glow)" />
+
+  <!-- Layer 3 Nodes: The rest of the nodes (including antenna tip and face centroids) drawn on top of the antenna rod -->
+  <g fill="#ffffff">
+    <!-- Primary Corner Nodes -->
+    <circle cx="126" cy="195" r="10" stroke="#3b82f6" stroke-width="4" />
+    <circle cx="386" cy="195" r="10" stroke="#3b82f6" stroke-width="4" />
+    <circle cx="256" cy="270" r="11" stroke="#3b82f6" stroke-width="4.5" />
+    <circle cx="126" cy="375" r="10" stroke="#3b82f6" stroke-width="4" />
+    <circle cx="386" cy="375" r="10" stroke="#3b82f6" stroke-width="4" />
+    <circle cx="256" cy="450" r="10" stroke="#7c3aed" stroke-width="4" />
+
+    <!-- Antenna Tip Node -->
+    <circle cx="256" cy="50" r="12" stroke="#7c3aed" stroke-width="5" />
+
+    <!-- Ear/Bolt Tip Nodes -->
+    <circle cx="96" cy="178" r="7" stroke="#00f2fe" stroke-width="3" />
+    <circle cx="416" cy="178" r="7" stroke="#00f2fe" stroke-width="3" />
+
+    <!-- Edge Midpoint Nodes -->
+    <circle cx="191" cy="157.5" r="6.5" stroke="#00f2fe" stroke-width="3" />
+    <circle cx="321" cy="157.5" r="6.5" stroke="#00f2fe" stroke-width="3" />
+    <circle cx="126" cy="285" r="6.5" stroke="#00f2fe" stroke-width="3" />
+    <circle cx="386" cy="285" r="6.5" stroke="#00f2fe" stroke-width="3" />
+    <circle cx="191" cy="412.5" r="6.5" stroke="#00f2fe" stroke-width="3" />
+    <circle cx="321" cy="412.5" r="6.5" stroke="#00f2fe" stroke-width="3" />
+
+    <!-- Face Centroids (Robot Eyes) -->
+    <circle cx="191" cy="322.5" r="11" stroke="#00f2fe" stroke-width="4.5" />
+    <circle cx="321" cy="322.5" r="11" stroke="#00f2fe" stroke-width="4.5" />
+    <!-- Top Face Centroid -->
+    <circle cx="256" cy="195" r="6.5" stroke="#7c3aed" stroke-width="3" />
+  </g>
+</svg>
