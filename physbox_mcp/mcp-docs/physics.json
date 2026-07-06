@@ -1,0 +1,391 @@
+{
+  "overview": "Physics Sim is a browser-based MuJoCo rigid-body physics simulator. Scenes are defined as a tree of SceneNode bodies, each with primitive geoms and joints. The simulator compiles scenes to MJCF XML and runs MuJoCo WASM in the browser. Coordinate system: X=right, Y=forward/depth, Z=up. Ground plane at Z=0.",
+  "workflow": [
+    "1. Call physics_get_schema to understand available geom/joint types and fields.",
+    "2. Use physics_build_scene (easy, auto-fills defaults) or physics_update_scene (full control).",
+    "3. Use physics_run_headless to simulate N ticks and verify behaviour programmatically — check final positions, velocities, or trajectory shape against expected values. Do this before relying on visual inspection.",
+    "4. Call physics_play to show the simulation to the user once you have confirmed it behaves correctly via headless run.",
+    "5. Use physics_set_environment to adjust gravity, wind, floor friction, and fluid density."
+  ],
+  "gotchas": [
+    "DO NOT add a body with a plane geom as a floor. MuJoCo provides a built-in ground plane at Z=0 automatically. Adding a plane body causes a silent compile error — the scene loads but physics_play returns ok:true while isPlaying stays false. Omit the floor body entirely.",
+    "After calling physics_play, immediately call physics_get_state and check that isPlaying is true. If it is still false, the scene failed to compile (likely a bad geom, duplicate name, or plane body conflict). Fix the scene and try again.",
+    "Script functions require the 'api.' prefix. Writing getTime() instead of api.getTime() throws ReferenceError and silently breaks the script. All api calls must be api.functionName(...).",
+    "To give a body an initial velocity, use a script with a first-tick guard: if (api.getTime() === 0) { api.setVelocity([...], 'bodyName'); }. Using === 0 fires exactly on the first tick.",
+    "The script field on a SceneNode is a single string: 'script': '...' — NOT an array. Passing scripts:[{code:'...'}] or scripts:['...'] will silently be ignored and the script will never run. Always use the singular 'script' key with a flat string value.",
+    "Bodies that should NOT collide with each other (e.g. windmill blades, rotor hub, nacelle) MUST have contype:0 AND conaffinity:0 on ALL their geoms. Without this, sibling bodies that overlap near a shared parent origin generate huge contact-constraint forces that oscillate and prevent scripted torques from accumulating. Even a few millimetres of geom overlap near the hub causes ±1 rad/s oscillation that prevents spin-up.",
+    "api.getOrientation() returns the 9-element row-major rotation matrix of the body the script is attached to (xmat). Column 0 = [R[0], R[3], R[6]] is the body's local X-axis in world space. For a rotor with hinge axis=[1,0,0], project wind onto this axis to get the effective wind speed: Vw = windX*R[0] + windY*R[3].",
+    "physics_update_scene's sceneGraph parameter is a bare array of SceneNode objects (matching physics_build_scene's bodies convention) — NOT { nodes: [...] }. Passing the wrapped object form is tolerated but the array form is canonical.",
+    "physics_build_scene and physics_update_scene now wait for any scad bodies to finish compiling and for a final MJCF recompile before responding, and report the real result as { ok, error?, nodeCount } — no need to poll physics_get_state afterward for scad-heavy scenes. This does mean the call itself can take several seconds for scenes with multiple scad bodies (each compiles sequentially).",
+    "physics_get_state.lastCompileError holds the most recent MJCF/MuJoCo compile error message (or null on success) — check this after loading a scene to see the real underlying failure reason instead of just a generic ok:false."
+  ],
+  "coordinateSystem": {
+    "mujocoWorldSpace": "X=right, Y=forward (into screen), Z=up. Ground plane at Z=0. Gravity default: Z=-9.81.",
+    "geomPos": "pos field on geoms is a local offset from the body origin in MuJoCo Z-up space.",
+    "bodyPos": "pos field on bodies is relative to parent body (or world origin for root bodies).",
+    "meshVertices": "EXCEPTION: mesh geom vertices are in Three.js Y-up world space (X=right, Y=up, Z=toward camera). See mesh section."
+  },
+  "tools": {
+    "physics_get_state": "Return full Physics Sim state: sceneGraph, isPlaying, isLoaded, gravity, wind, density, lastCompileError (string | null — the most recent MJCF/MuJoCo compile failure message, or null if the last compile succeeded).",
+    "physics_get_scene": "Return the full scene graph (bodies, joints, geoms, scripts), including raw mesh vertex/face arrays. Can be a very large payload for scad/mesh-heavy scenes — prefer physics_get_scene_summary unless you actually need the raw arrays.",
+    "physics_get_scene_summary": "Return a lightweight scene summary: per-node id/name/pos/quat/euler/joints, and per-geom type/size, or for mesh geoms vertCount/faceCount/bbox instead of the raw vertices/faces arrays. Use this for routine checks (did it compile, roughly what size/shape is it) instead of physics_get_scene.",
+    "physics_play": "Start the physics simulation.",
+    "physics_stop": "Stop the physics simulation.",
+    "physics_toggle_play": "Toggle play/pause of the physics simulation.",
+    "physics_reset": "Reset the physics simulation to its initial state.",
+    "physics_list_presets": "Return available physics scene preset names.",
+    "physics_load_preset": "Load a physics scene preset. Valid presets: pendulum, cubes, gears, machine, rack_pinion, inclined_plane, pulley_system, cartpole, newtons_cradle, suspension_bridge, paper_plane, monkey_head, golden_gate, golden_gate_mesh, mesh_collision, coin_flip, windmill, physics_only_windmill, traditional_windmill, drone, bouncy_balls.",
+    "physics_set_environment": "Update physics environment. gravityZ is negative for downward gravity (e.g. -9.81). windX/windY add lateral fluid drag. density adds buoyancy. floorFriction controls ground grip. floorBounce: 0=no bounce (default), 1=maximum bounce — sets floor dampingRatio to (1-floorBounce), averaged with each contacting geom's own dampingRatio. All fields optional.",
+    "physics_update_scene": "Replace the full scene graph. sceneGraph is a bare array of SceneNode objects (same convention as physics_build_scene's bodies param). Full control but requires complete valid structure. Waits for any scad bodies to finish compiling and for MJCF to settle before responding — the response is { ok, error?, nodeCount }, so check `ok`/`error` directly rather than polling physics_get_state. Can take several seconds for scenes with multiple scad bodies.",
+    "physics_get_schema": "Return the full schema describing every geom type, joint type, and field. Call this first when building scenes.",
+    "physics_get_screenshot": "Capture the current rendered frame of the Physics Sim's 3D viewport as a PNG image, exactly as a user would see it (camera angle, colors, lighting). Use this to visually verify a scene's layout, spacing, or shape instead of only inspecting the scene graph numerically.",
+    "physics_build_scene": "Build and load a scene from simplified body descriptors. Auto-fills safe defaults. Easier than physics_update_scene. Waits for any scad bodies to finish compiling and for MJCF to settle before responding — the response is { ok, error?, nodeCount }, so check `ok`/`error` directly rather than polling physics_get_state. Can take several seconds for scenes with multiple scad bodies.",
+    "physics_run_headless": "Run the physics simulation headlessly for N ticks. Returns trajectory: [{time, bodies:{name:{pos,vel,angvel,xfrc_applied}}, joints:{name:{pos,vel,qfrc_applied}}, contacts:[{geom1,geom2,dist}], aeroDiagnostics:{name:{relSpeed,alpha,CL,CD,force,torque}}}], warnings:[string]. Does not affect the live view. Use this to verify scene behaviour programmatically — e.g. check a projectile lands in the right place, a pendulum reaches the right angle, or a body comes to rest at the expected position — before calling physics_play for visual presentation.",
+    "physics_get_history": "Return the complete array of physical telemetry history up to 5000 frames (contains time, bodies, joints, contacts, and aeroDiagnostics). Large payload.",
+    "physics_get_telemetry": "Return only the latest single frame of simulation telemetry (contains time, bodies: { name: { pos, vel, angvel, xfrc_applied } }, joints: { name: { pos, vel, qfrc_applied } }, contacts, and aeroDiagnostics). Lightweight alternative to physics_get_history.",
+    "physics_get_note_cards": "Return the current array of note card overlays. Each card has { id, markdown, minimized, x, y }.",
+    "physics_set_note_cards": "Replace the note card overlays. Pass noteCards: [{ id, markdown, minimized, x, y }]. Use to add explanatory notes, update existing cards, or clear all cards (pass an empty array)."
+  },
+  "schema": {
+    "geomTypes": ["box", "sphere", "capsule", "cylinder", "ellipsoid", "plane", "mesh"],
+    "geomSizes": {
+      "box": "half-extents [hx, hy, hz] — full dimensions are 2*hx × 2*hy × 2*hz",
+      "sphere": "radius [r]",
+      "capsule": "[radius, half-height] — a cylinder of half-height hh capped with hemispheres of radius r. Or use fromto to specify endpoints directly.",
+      "cylinder": "[radius, half-height] — flat-ended cylinder",
+      "ellipsoid": "semi-axes [rx, ry, rz] — like a sphere stretched independently on each axis",
+      "plane": "ignored — MuJoCo treats it as an infinite ground plane",
+      "mesh": "not used — shape defined by vertices+faces. VISUAL ONLY by default — does not simulate or collide."
+    },
+    "jointTypes": {
+      "free": "6-DOF unconstrained — body falls freely under gravity. Use for dropped objects.",
+      "hinge": "1-DOF rotation around axis. Specify axis:[x,y,z]. Use for wheels, doors, pendulums.",
+      "slide": "1-DOF translation along axis. Specify axis:[x,y,z]. Use for pistons, rails.",
+      "ball": "3-DOF rotation (ball-and-socket). Use with stiffness+damping for springs, sway."
+    },
+    "geomFields": {
+      "name": "string — unique identifier (required)",
+      "type": "GeomType (required)",
+      "size": "number[] — see geomSizes",
+      "rgba": "[r,g,b,a] each 0-1 — color and opacity",
+      "pos": "[x,y,z] — local offset from body origin in MuJoCo Z-up space",
+      "quat": "[w,x,y,z] — local rotation quaternion",
+      "euler": "[roll,pitch,yaw] degrees — local rotation, alternative to quat",
+      "fromto": "[x1,y1,z1, x2,y2,z2] — capsule/cylinder endpoints in local space, overrides size/pos/quat",
+      "mass": "number — override density-based mass for this geom",
+      "friction": "[slide, spin, roll] — contact friction coefficients. slide: tangential sliding (0=icy, 2=rubbery). spin: torsional around contact normal (typical 0.005). roll: rolling resistance (typical 0.0001).",
+      "contype": "integer bitmask — collision group this geom belongs to",
+      "conaffinity": "integer bitmask — which groups this geom collides with",
+      "condim": "1|3|4|6 — contact dimensionality",
+      "solref": "[timeconst_s, dampingRatio] — contact spring parameters. timeconst_s: spring time constant in seconds, must be >= 5x timestep (0.005s minimum). Lower = stiffer contact. dampingRatio: 1.0 = critically damped (no bounce), 0.0 = underdamped (max bounce), ~0.2 = lively bouncing. Contact between two geoms averages both dampingRatios — set floor to 0.0 and ball to 0.2 to get 0.1 effective ratio. Default (no solref set): [0.02, 1.0] = stiff, no bounce.",
+      "solimp": "[d0, d1, width, midpoint, power] — contact impedance. d0: min impedance (0.8-0.99), d1: max impedance (0.99-0.9999), width: transition width, midpoint: where transition is centered, power: curve shape. Higher d0/d1 = harder contact, less penetration. Typical bouncy: [0.99, 0.9999, 0.0001, 0.5, 2].",
+      "vertices": "number[] — mesh only: flat [x0,y0,z0,...] in Three.js Y-up space (X=right, Y=up, Z=toward camera)",
+      "faces": "number[] — mesh only: flat triangle indices [i0,j0,k0,...] with outward-facing (CCW) winding",
+      "dynamic": "boolean — if true, mesh participates fully in simulation and collision (convex hull). Requires renderVertices.",
+      "renderVertices": "number[] — dynamic mesh only: flat [x0,y0,z0,...] in raw MuJoCo Z-up space. Convert from Y-up: (x,y,z)→(x,-z,y). Do NOT subtract centroid — MuJoCo recenters internally and xpos tracks the result.",
+      "margin": "number — expand contact surface outward by this amount (meters). Useful to prevent sinking.",
+      "gap": "number — dead zone inside margin where no contact force is applied."
+    },
+    "nodeFields": {
+      "id": "string — unique body identifier",
+      "name": "string — display name and MuJoCo XML name",
+      "type": "always 'body'",
+      "pos": "[x,y,z] — position relative to parent (or world for root)",
+      "quat": "[w,x,y,z] — body orientation",
+      "euler": "[roll,pitch,yaw] degrees — body orientation, alternative to quat",
+      "geoms": "SceneGeom[] — one or more geoms defining shape",
+      "joints": "SceneJoint[] — joints to parent (empty = fixed to world)",
+      "children": "SceneNode[] — child bodies",
+      "coupleTargetId": "id of body to gear-couple first joints with",
+      "coupleRatio": "gear ratio for coupling (default -1)",
+      "weldTargetId": "id of body to rigidly weld (closed-loop constraint)",
+      "connectTargetId": "id of body for ball-socket point constraint",
+      "connectAnchor": "[x,y,z] world-space anchor for connect constraint",
+      "script": "JavaScript control script running at 1000 Hz. IMPORTANT: all functions must be called with the 'api.' prefix — e.g. api.getTime(), api.setVelocity([...], 'bodyName'). Bare calls like getTime() will throw ReferenceError. Available: api.isKeyPressed(keyName), api.getPosition(bodyName), api.getVelocity(bodyName), api.getAngularVelocity(bodyName), api.getOrientation(bodyName), api.setPosition(pos, bodyName), api.setVelocity(vel, bodyName), api.setAngularVelocity(angvel, bodyName), api.getMass(bodyName), api.getJointPosition(jointName), api.getJointVelocity(jointName), api.applyForce(forceVec, bodyName), api.applyTorque(torqueVec, bodyName), api.applyJointForce(jointName, forceVal), api.setActuatorControl(actuatorName, ctrlVal), api.getTime(), api.getWind(), api.log(msg). To launch a body with an initial velocity on the first tick: 'if (api.getTime() === 0) { api.setVelocity([vx, vy, vz], \"bodyName\"); api.setAngularVelocity([wx, wy, wz], \"bodyName\"); }'",
+      "scad": "string — raw OpenSCAD source code to procedurally compile into a dynamic mesh geometry"
+    },
+    "jointFields": {
+      "name": "string — unique joint name",
+      "type": "hinge|slide|ball|free",
+      "axis": "[x,y,z] — rotation/translation axis (hinge/slide only)",
+      "pos": "[x,y,z] — joint anchor point in local body space",
+      "damping": "number — velocity-proportional resistance (for free joints, scales drag force/torque to decay velocity and spin uniformly)",
+      "stiffness": "number — spring constant pulling back to springref",
+      "springref": "number — rest angle/position for spring",
+      "limited": "boolean — whether range limits are active",
+      "range": "[min,max] — joint limits in degrees (hinge) or meters (slide)",
+      "actuator": "{ type:'velocity'|'motor', kv?:number, gear?:number, ctrlValue?:number }"
+    },
+    "contactPhysicsTips": {
+      "howContactParamsAreBlended": "When two geoms touch, MuJoCo averages their solref and solimp values. This means the floor's dampingRatio directly dilutes a ball's bounce: ball dampingRatio 0.2 + floor dampingRatio 0.0 = effective 0.1 (bouncy). Ball 0.2 + floor 1.0 = effective 0.6 (dead). The built-in floor uses dampingRatio=0.0 so it does not kill bounce.",
+      "defaultContactParams": "Geoms with no solref/solimp use the scene default: solref=[0.02, 1.0] (stiff, no bounce), solimp=[0.99, 0.9999, 0.0001, 0.5, 2]. Only set solref/solimp on geoms where you want non-default behaviour.",
+      "makingBouncyObjects": "Set solref=[0.04, 0.2] and solimp=[0.99, 0.9999, 0.0001, 0.5, 2] on the geom. dampingRatio 0.2 gives lively but controlled bounce. The UI Bounciness slider (under Physical Material in the properties panel) sets dampingRatio directly, keeping timeconst at 0.04s.",
+      "stabilityLimit": "solref[0] (timeconst) must be at least 5x the simulation timestep (0.001s), so minimum 0.005s. Lower values make the contact spring too stiff for the integrator and cause energy explosion. 0.04s is a safe, stiff-feeling default.",
+      "frictionComponents": "friction=[slide, spin, roll]. slide (0-2): tangential friction — 0=icy, 1=normal, 2=rubbery. spin (0-0.05): torsional friction around contact normal. roll (0-0.01): rolling resistance — keeps spheres from rolling forever."
+    },
+    "meshNotes": {
+      "staticMesh": "No dynamic field (or dynamic:false). VISUAL ONLY — does not simulate, move, or collide. Vertices in Three.js Y-up world space. Good for scenery, decorative structures, visual shells around primitive collision proxies.",
+      "dynamicMesh": "dynamic:true. Full physics + collision (convex hull). Vertices in Three.js Y-up for collision, renderVertices in raw MuJoCo Z-up for rendering. Body moves with simulation.",
+      "renderVerticesRule": "renderVertices = Y-up vertices with Y↔Z swapped: (x,y,z)→(x,-z,y). No centroid subtraction. MuJoCo recenters the mesh internally; xpos tracks the body frame correctly.",
+      "faceWinding": "Use outward-facing CCW winding. Wrong winding causes inside-out contact normals and objects sinking through surfaces.",
+      "bodyPos": "For a dynamic mesh whose Y-up base is at Y=0, set body_pos=[0,0,0]. The mesh will render with its MuJoCo origin at ground level. Adjust body_pos.z to raise/lower.",
+      "goodUseCases": ["Static background scenery", "Decorative structures", "Dynamic convex polyhedra (pyramids, crystals, custom shapes)", "Multi-geom bodies (mesh + primitive sub-components)"]
+    },
+    "openScadNotes": {
+      "definition": "You can define procedural shapes using the scad property on a body node. Example: scad: 'difference() { cube([0.5,0.5,0.5], center=true); sphere(d=0.6); }'.",
+      "automaticCompilation": "If a body node specifies a scad property and geoms is omitted, the simulator automatically registers it as a dynamic mesh geom and compiles it to vertices and faces. The resulting dynamic mesh behaves as a physical body with collision detection."
+    },
+    "tips": [
+      "Compound shapes: add multiple geoms to one body with different pos/quat/euler offsets",
+      "Asymmetric shapes: combine box + sphere + cylinder geoms on a single body",
+      "Torus-like shapes: ring of capsule geoms arranged with pos+euler offsets",
+      "L/T/cross shapes: multiple box geoms with offset positions on one body",
+      "fromto on capsule lets you specify start/end points directly in local space",
+      "Use rgba to color each geom independently for visual variety",
+      "ellipsoid semi-axes let you squash/stretch independently on all 3 axes",
+      "Children without joints are rigid offsets — useful for adding detail geometry",
+      "Arbitrary mesh: type=mesh with vertices=[x0,y0,z0,...] and faces=[i0,j0,k0,...] (triangles)",
+      "CRITICAL — mesh vertex coordinate system: X=right, Y=up (height), Z=toward camera. This is Three.js world space, NOT MuJoCo Z-up. The ground plane is at Y=0.",
+      "Mesh vertical post example: vertices centred at (cx, halfHeight, cz) with hy=halfHeight (tall in Y)",
+      "Mesh flat plank example: box(cx, 0.3, cz, halfSpan, 0.06, halfWidth) — small hy=thickness, large hx=span",
+      "Mesh tetrahedron example: vertices=[0,0,0, 1,0,0, 0.5,1,0, 0.5,0.5,1], faces=[0,1,2, 0,1,3, 1,2,3, 0,2,3]",
+      "Static mesh (no dynamic field): visual-only. Vertices in Three.js Y-up world space. Never moves, never collides. Good for scenery and decorative structures.",
+      "Dynamic mesh (dynamic:true): full physics+collision. MuJoCo takes convex hull — concave shapes will not collide correctly. Requires renderVertices.",
+      "CRITICAL — hollow/concave containers (cups, boxes-with-open-tops, tubes): a single dynamic mesh geom can NEVER act as a real container, no matter how the vertices are shaped. MuJoCo collides dynamic meshes via their convex hull, and the hull of a hollow shape's vertices is just the solid outer envelope (it fills in the concave interior) — anything dropped on it lands on what is effectively a solid block. Build the hollow shape as a compound body instead: a floor + walls as separate primitive box/cylinder geoms on the same body (each primitive is individually convex, so together they form a real cavity). If you also want a nicer-looking CSG/OpenSCAD shell, add it as an EXTRA geom on the same body with contype:0 and conaffinity:0 (dynamic:true so it still tracks the body kinematically, but doesn't participate in collision) so the primitives handle physics while the mesh handles looks.",
+      "GOTCHA — rgba alpha is NOT rendered as transparency in this app: the renderer's material always uses full opacity regardless of the 4th rgba value, so rgba:[r,g,b,0] does NOT make a geom invisible — it renders as solid opaque black (r=g=b=0), which commonly causes flickering/z-fighting where it overlaps another geom. To hide a primitive collision proxy, do NOT rely on alpha — either color it to match the geom it's layered under (e.g. same rgba as a decorative mesh sitting on top of it) or set contype:0/conaffinity:0 on whichever geom you don't want colliding and accept both are visible.",
+      "Dynamic mesh renderVertices: just swap Y↔Z on each Y-up vertex: (x,y,z)→(x,-z,y). Do NOT subtract centroid. MuJoCo recenters internally.",
+      "Dynamic mesh face winding: use outward-facing CCW winding. Wrong winding causes inside-out contacts and objects sinking through surfaces.",
+      "Dynamic mesh body pos: set body_pos=[0,0,0] to place mesh where its Y-up base sits. Adjust body_pos.z to raise/lower.",
+      "OpenSCAD shapes: set scad=\"cube([0.5,0.5,0.5]);\" on a body node. If geoms is omitted, it automatically creates a dynamic mesh geom and compiles the SCAD code to vertices/faces.",
+      "Working example: mesh_collision preset (pyramid + ramp with full collision).",
+      "Bouncy objects: set solref=[0.04, 0.2] and solimp=[0.99, 0.9999, 0.0001, 0.5, 2]. dampingRatio 0.2 = lively bounce. The floor has dampingRatio=0.0 so ball+floor averages to 0.1 (still bouncy).",
+      "Contact blending: two geoms in contact average their solref/solimp. Keep this in mind when tuning — a non-bouncy floor (dampingRatio=1.0) will halve any ball's effective bounce."
+    ]
+  },
+  "examples": [
+    {
+      "title": "Falling Sphere",
+      "description": "A single sphere dropped from height 3m with a free joint. Simplest possible simulation.",
+      "code": "physics_build_scene(bodies=[{\"id\":\"ball\",\"name\":\"ball\",\"pos\":[0,0,3],\"joints\":[{\"name\":\"ball_free\",\"type\":\"free\"}],\"geoms\":[{\"name\":\"ball_geom\",\"type\":\"sphere\",\"size\":[0.25],\"rgba\":[0.2,0.6,1,1],\"mass\":1}]}])"
+    },
+    {
+      "title": "Stack of Boxes",
+      "description": "Three boxes stacked on top of each other, each with a free joint so they can topple.",
+      "bodies": [
+        {
+          "id": "box1", "name": "box1", "pos": [0, 0, 0.25],
+          "joints": [{"name": "box1_free", "type": "free"}],
+          "geoms": [{"name": "box1_g", "type": "box", "size": [0.25, 0.25, 0.25], "rgba": [0.8, 0.2, 0.2, 1], "mass": 1}]
+        },
+        {
+          "id": "box2", "name": "box2", "pos": [0, 0, 0.75],
+          "joints": [{"name": "box2_free", "type": "free"}],
+          "geoms": [{"name": "box2_g", "type": "box", "size": [0.25, 0.25, 0.25], "rgba": [0.2, 0.8, 0.2, 1], "mass": 1}]
+        },
+        {
+          "id": "box3", "name": "box3", "pos": [0, 0, 1.25],
+          "joints": [{"name": "box3_free", "type": "free"}],
+          "geoms": [{"name": "box3_g", "type": "box", "size": [0.25, 0.25, 0.25], "rgba": [0.2, 0.2, 0.8, 1], "mass": 1}]
+        }
+      ]
+    },
+    {
+      "title": "Simple Pendulum",
+      "description": "A rod with a heavy bob hanging from a fixed pivot. Hinge joint on Y-axis.",
+      "bodies": [
+        {
+          "id": "pendulum", "name": "pendulum", "pos": [0, 0, 3],
+          "joints": [{"name": "pivot", "type": "hinge", "axis": [0, 1, 0], "pos": [0, 0, 0], "damping": 0.1}],
+          "geoms": [
+            {"name": "rod", "type": "capsule", "fromto": [0, 0, 0, 1.2, 0, 0], "size": [0.04], "rgba": [0.6, 0.6, 0.6, 1], "mass": 0.5},
+            {"name": "bob", "type": "sphere", "size": [0.15], "pos": [1.2, 0, 0], "rgba": [0.2, 0.4, 0.9, 1], "mass": 5}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Spinning Motor",
+      "description": "A cylinder with a velocity-actuated hinge motor spinning at 2 rad/s.",
+      "bodies": [
+        {
+          "id": "rotor", "name": "rotor", "pos": [0, 0, 1],
+          "joints": [{
+            "name": "motor_hinge", "type": "hinge", "axis": [0, 0, 1], "damping": 0.5,
+            "actuator": {"type": "velocity", "kv": 10, "ctrlValue": 2.0}
+          }],
+          "geoms": [{"name": "disc", "type": "cylinder", "size": [0.4, 0.05], "rgba": [0.8, 0.4, 0.1, 1], "mass": 2}]
+        }
+      ]
+    },
+    {
+      "title": "Compound Weird Shape",
+      "description": "An asymmetric compound body built from multiple geom types on one body — demonstrates the compound geom approach for arbitrary shapes.",
+      "bodies": [
+        {
+          "id": "weird", "name": "weird", "pos": [0, 0, 3],
+          "joints": [{"name": "weird_free", "type": "free"}],
+          "geoms": [
+            {"name": "core",   "type": "box",       "size": [0.4, 0.1, 0.1], "rgba": [1, 0, 0, 1]},
+            {"name": "tip_r",  "type": "sphere",    "size": [0.15],           "rgba": [0, 1, 0, 1], "pos": [0.45, 0, 0]},
+            {"name": "tip_l",  "type": "capsule",   "size": [0.05, 0.25],     "rgba": [0, 0, 1, 1], "pos": [-0.45, 0, 0], "euler": [0, 90, 0]},
+            {"name": "blob",   "type": "ellipsoid", "size": [0.2, 0.08, 0.15], "rgba": [1, 1, 0, 1], "pos": [0, 0, 0.22]},
+            {"name": "spike",  "type": "cylinder",  "size": [0.03, 0.2],      "rgba": [1, 0, 1, 1], "pos": [0, 0, -0.28], "euler": [0, 0, 0]}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Wind-Responsive Structure",
+      "description": "A tall mast on a stiff ball joint that sways in wind and springs back. Set windX=5 in environment to see it sway.",
+      "setup": "First call: physics_set_environment(windX=5.0). Then load the scene.",
+      "bodies": [
+        {
+          "id": "mast_base", "name": "mast_base", "pos": [0, 0, 0],
+          "joints": [{"name": "sway", "type": "ball", "pos": [0, 0, 0], "damping": 50, "stiffness": 200}],
+          "geoms": [
+            {"name": "pole",   "type": "capsule",  "fromto": [0, 0, 0, 0, 0, 3.0], "size": [0.06], "rgba": [0.6, 0.6, 0.6, 1], "mass": 20},
+            {"name": "top",    "type": "sphere",   "size": [0.12], "pos": [0, 0, 3.0], "rgba": [0.9, 0.2, 0.2, 1], "mass": 2}
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Headless Trajectory Analysis",
+      "description": "Run a pendulum simulation for 500 ticks and analyse the trajectory without disrupting the live view.",
+      "steps": [
+        "physics_load_preset('pendulum')",
+        "result = physics_run_headless(ticks=500)",
+        "# result.trajectory is [{time, bodies:{pole:{pos,vel,angvel}}, joints:{hinge:{pos,vel}}}]",
+        "# Analyse max angle: max(abs(t['joints']['hinge']['pos']) for t in result.trajectory)",
+        "# Period: find zero crossings in joints.hinge.pos"
+      ]
+    },
+    {
+      "title": "Chained Pendulum (Multi-body)",
+      "description": "A double pendulum: pole1 hangs from world, pole2 hangs from the tip of pole1. Demonstrates parent-child body tree.",
+      "bodies": [
+        {
+          "id": "pole1", "name": "pole1", "pos": [0, 0, 3],
+          "joints": [{"name": "hinge1", "type": "hinge", "axis": [0, 1, 0], "damping": 0}],
+          "geoms": [
+            {"name": "rod1", "type": "capsule", "fromto": [0,0,0, 1,0,0], "size": [0.05], "rgba": [0.6,0.6,0.6,1], "mass": 1},
+            {"name": "bob1", "type": "sphere",  "size": [0.12], "pos": [1,0,0], "rgba": [0.3,0.5,0.8,1], "mass": 7}
+          ],
+          "children": [
+            {
+              "id": "pole2", "name": "pole2", "pos": [1, 0, 0],
+              "joints": [{"name": "hinge2", "type": "hinge", "axis": [0, 1, 0], "damping": 0}],
+              "geoms": [
+                {"name": "rod2", "type": "capsule", "fromto": [0,0,0, 1,0,0], "size": [0.05], "rgba": [0.5,0.5,0.5,1], "mass": 1},
+                {"name": "bob2", "type": "sphere",  "size": [0.15], "pos": [1,0,0], "rgba": [0.2,0.6,1.0,1], "mass": 14}
+              ],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Gear Coupling",
+      "description": "Two meshing gears coupled via explicit joint coupling. One is motor-driven; the other counter-rotates via coupleTargetId.",
+      "bodies": [
+        {
+          "id": "gear1", "name": "gear1", "pos": [0, 0, 0.05],
+          "joints": [{"name": "gear1_hinge", "type": "hinge", "axis": [0, 0, 1], "damping": 0.5, "actuator": {"type": "velocity", "kv": 20, "ctrlValue": 1.5}}],
+          "geoms": [{"name": "gear1_cyl", "type": "cylinder", "size": [0.5, 0.05], "rgba": [0.8, 0.4, 0.2, 1], "mass": 1}],
+          "children": []
+        },
+        {
+          "id": "gear2", "name": "gear2", "pos": [1.05, 0, 0.05],
+          "joints": [{"name": "gear2_hinge", "type": "hinge", "axis": [0, 0, 1], "damping": 0.5}],
+          "geoms": [{"name": "gear2_cyl", "type": "cylinder", "size": [0.5, 0.05], "rgba": [0.2, 0.6, 0.8, 1], "mass": 1}],
+          "coupleTargetId": "gear1",
+          "coupleRatio": -1.0,
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Static Mesh Scenery (Visual Only)",
+      "description": "A decorative arch made from mesh geoms. Fixed to world (no joint). VISUAL ONLY — does not simulate or collide. Use primitives if you need physics.",
+      "note": "Mesh vertices are in Three.js Y-up world space: X=right, Y=up, Z=toward camera. Ground at Y=0.",
+      "bodies": [
+        {
+          "id": "arch", "name": "arch", "pos": [0, 0, 0],
+          "joints": [],
+          "geoms": [
+            {
+              "name": "arch_left_pillar", "type": "mesh", "size": [1],
+              "rgba": [0.7, 0.7, 0.7, 1],
+              "vertices": [-1.1,-0.1,-0.1, -0.9,-0.1,-0.1, -0.9,-0.1,0.1, -1.1,-0.1,0.1, -1.1,2.0,-0.1, -0.9,2.0,-0.1, -0.9,2.0,0.1, -1.1,2.0,0.1],
+              "faces": [0,1,2,0,2,3, 4,6,5,4,7,6, 0,4,5,0,5,1, 3,2,6,3,6,7, 0,3,7,0,7,4, 1,5,6,1,6,2]
+            },
+            {
+              "name": "arch_right_pillar", "type": "mesh", "size": [1],
+              "rgba": [0.7, 0.7, 0.7, 1],
+              "vertices": [0.9,-0.1,-0.1, 1.1,-0.1,-0.1, 1.1,-0.1,0.1, 0.9,-0.1,0.1, 0.9,2.0,-0.1, 1.1,2.0,-0.1, 1.1,2.0,0.1, 0.9,2.0,0.1],
+              "faces": [0,1,2,0,2,3, 4,6,5,4,7,6, 0,4,5,0,5,1, 3,2,6,3,6,7, 0,3,7,0,7,4, 1,5,6,1,6,2]
+            },
+            {
+              "name": "arch_lintel", "type": "mesh", "size": [1],
+              "rgba": [0.6, 0.6, 0.6, 1],
+              "vertices": [-1.1,1.9,-0.1, 1.1,1.9,-0.1, 1.1,1.9,0.1, -1.1,1.9,0.1, -1.1,2.1,-0.1, 1.1,2.1,-0.1, 1.1,2.1,0.1, -1.1,2.1,0.1],
+              "faces": [0,1,2,0,2,3, 4,6,5,4,7,6, 0,4,5,0,5,1, 3,2,6,3,6,7, 0,3,7,0,7,4, 1,5,6,1,6,2]
+            }
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "title": "Scripted Launch — Coin Flip into Cup",
+      "description": "A gold coin launched off the floor with an initial velocity via a first-tick script. Demonstrates api.setVelocity / api.setAngularVelocity and building a hollow cup from fixed box walls. No floor body needed — MuJoCo's built-in ground plane is used.",
+      "notes": [
+        "All script calls use api.* prefix.",
+        "The time guard (api.getTime() < 0.003) fires only on the first simulation step.",
+        "Cup walls are separate fixed bodies (joints:[]) — no joint means fixed to world.",
+        "Trajectory maths: vx=0.4, vz=5.0 → coin reaches x=0.4m at t≈1s, drops through cup opening at z=0.06m."
+      ],
+      "bodies": [
+        {"id": "cup_front",  "name": "cup_front",  "pos": [0.4,  0.037, 0.03], "joints": [], "geoms": [{"name": "cup_front_g",  "type": "box", "size": [0.039, 0.002, 0.03], "rgba": [0.95, 0.9, 0.82, 1]}]},
+        {"id": "cup_back",   "name": "cup_back",   "pos": [0.4, -0.037, 0.03], "joints": [], "geoms": [{"name": "cup_back_g",   "type": "box", "size": [0.039, 0.002, 0.03], "rgba": [0.95, 0.9, 0.82, 1]}]},
+        {"id": "cup_left",   "name": "cup_left",   "pos": [0.363, 0,    0.03], "joints": [], "geoms": [{"name": "cup_left_g",   "type": "box", "size": [0.002, 0.035, 0.03], "rgba": [0.95, 0.9, 0.82, 1]}]},
+        {"id": "cup_right",  "name": "cup_right",  "pos": [0.437, 0,    0.03], "joints": [], "geoms": [{"name": "cup_right_g",  "type": "box", "size": [0.002, 0.035, 0.03], "rgba": [0.95, 0.9, 0.82, 1]}]},
+        {"id": "cup_bottom", "name": "cup_bottom", "pos": [0.4,   0,   0.002], "joints": [], "geoms": [{"name": "cup_bottom_g", "type": "box", "size": [0.035, 0.035, 0.002], "rgba": [0.95, 0.9, 0.82, 1]}]},
+        {
+          "id": "coin", "name": "coin", "pos": [0, 0, 0.001],
+          "joints": [{"name": "coin_joint", "type": "free"}],
+          "geoms": [{"name": "coin_geom", "type": "cylinder", "size": [0.02, 0.001], "mass": 0.01, "rgba": [0.85, 0.65, 0.1, 1]}],
+          "script": "if (api.getTime() === 0) { api.setVelocity([0.4, 0, 5.0], 'coin'); api.setAngularVelocity([0, 25, 0], 'coin'); }"
+        }
+      ]
+    },
+    {
+      "title": "Wind Simulation — Bridge Sway",
+      "description": "Load the Golden Gate Bridge preset (which has a ball-jointed deck) and apply wind to make it sway.",
+      "steps": [
+        "physics_load_preset('golden_gate')",
+        "physics_set_environment(windX=8.0, gravityZ=-9.81)",
+        "physics_play()",
+        "# The deck and cables will sway laterally and spring back."
+      ]
+    },
+    {
+      "title": "BEM Aerodynamic Rotor Script",
+      "description": "Blade Element Momentum script for a wind-driven rotor hinge. Attach this script to the rotor body. Set windX via physics_set_environment. All blade and hub geoms must have contype:0/conaffinity:0 to prevent contact oscillation. The traditional_windmill preset uses this pattern with 4 blades.",
+      "notes": [
+        "api.getOrientation() returns the 9-element xmat for the script's own body. Column 0 = [R[0],R[3],R[6]] = rotor X-axis in world (the hinge axis direction).",
+        "Project wind onto the rotor axis: Vw = windX*R[0] + windY*R[3]. This is the effective axial wind speed.",
+        "BEM integrates lift/drag over N radial segments. Tangential force × radius × numBlades gives total hinge torque.",
+        "Apply with api.applyJointForce('rotor_hinge', totalTorque). Forces reset to zero each tick before scripts run.",
+        "With windX=5, R_blade=0.9, 4 blades, pitch=18°: rotor reaches ~-1.9 rad/s at t=0.5s."
+      ],
+      "script": "const omega = api.getJointVelocity('rotor_hinge');\nconst [windX, windY] = api.getWind();\nconst R = api.getOrientation();\nconst ax = R[0], ay = R[3], az = R[6];\nconst Vw = windX * ax + windY * ay;\nconst numBlades = 4;\nconst R_blade = 0.9, r_hub = 0.15, pitch = 18 * Math.PI / 180, rho = 1.225;\nlet totalTorque = 0;\nconst N = 5, dr = (R_blade - r_hub) / N;\nfor (let i = 0; i < N; i++) {\n  const r = r_hub + (i + 0.5) * dr;\n  const Vt = -omega * r;\n  const Vrel = Math.sqrt(Vw * Vw + Vt * Vt);\n  if (Vrel > 0.05) {\n    const phi = Math.atan2(Math.abs(Vw), Math.abs(Vt));\n    const alpha = phi - pitch;\n    const CL = 1.5 * Math.sin(2 * alpha);\n    const CD = 0.08 + 1.2 * Math.sin(alpha) * Math.sin(alpha);\n    const chord = 0.22 * (1.0 - 0.3 * (r / R_blade));\n    const q = 0.5 * rho * Vrel * Vrel;\n    const dL = q * CL * chord * dr;\n    const dD = q * CD * chord * dr;\n    const signVw = Math.sign(Vw);\n    const dFt = -signVw * (dL * Math.sin(phi) - dD * Math.cos(phi));\n    totalTorque += dFt * r * numBlades;\n  }\n}\napi.applyJointForce('rotor_hinge', totalTorque);"
+    },
+    {
+      "title": "Procedural OpenSCAD Shape Spawning",
+      "description": "Spawn a procedural OpenSCAD body at height 2.5m using raw SCAD code, automatically compiling it into a dynamic mesh.",
+      "code": "physics_build_scene(bodies=[{\"id\":\"scad_gear\",\"name\":\"scad_gear\",\"pos\":[0,0,2.5],\"joints\":[{\"name\":\"gear_free\",\"type\":\"free\"}],\"scad\":\"difference() { cylinder(r=0.4, h=0.2, center=true, $fn=24); for(i=[0:5]) { rotate(i*60) translate([0.4,0,0]) cube([0.1,0.1,0.3], center=true); } }\"}])"
+    }
+  ]
+}

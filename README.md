@@ -1,0 +1,99 @@
+# PhysBox: MCP
+
+PhysBox: MCP is a Model Context Protocol (MCP) server that enables LLMs and MCP clients (such as Claude Code or Claude Desktop) to interact programmatically with the three simulation web applications in the browser:
+
+| Application | Production URL | Description |
+|---|---|---|
+| **Flux** | [flux.physbox.io](https://flux.physbox.io) | Discrete-event / system-dynamics simulation (interactive React Flow graph) |
+| **Volt** | [volt.physbox.io](https://volt.physbox.io) | SPICE circuit simulation (powered by NgSpice WASM in browser) |
+| **Mesh** | [mesh.physbox.io](https://mesh.physbox.io) | Rigid-body physics simulation (powered by MuJoCo WASM in browser) |
+
+All communication is handled via JSON over WebSockets directly to the web app in your browser—no browser automation or DOM scraping is needed.
+
+---
+
+## How It Works
+
+PhysBox: MCP functions as a local companion server that establishes a WebSocket relay on port `3142`. 
+
+When you open any of the simulation web apps, they connect directly to this WebSocket relay. When an MCP client executes a tool call, the command flows from the client to the companion server, gets forwarded to the active browser tab, and the results flow back.
+
+```
+MCP Client (e.g. Claude Desktop)
+  └── spawns → physbox-mcp (stdio)
+                 └── WebSocket Server (ws://localhost:3142)
+                                ├── Flux
+                                ├── Volt
+                                └── Mesh
+```
+
+---
+
+## Installation
+
+Install the companion server directly from PyPI:
+
+```bash
+pip install physbox-mcp
+```
+
+---
+
+## Usage & Setup
+
+### 1. Open the Web Applications
+Launch or access the simulation web applications in your web browser:
+*   **Flux:** [flux.physbox.io](https://flux.physbox.io)
+*   **Volt:** [volt.physbox.io](https://volt.physbox.io)
+*   **Mesh:** [mesh.physbox.io](https://mesh.physbox.io)
+
+As soon as a page finishes loading, it automatically registers with the companion WebSocket server.
+
+### 2. Configure Your MCP Client
+
+#### For Claude Desktop
+Add the following block to your Claude Desktop configuration file (typically located at `AppData/Roaming/Claude/claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "physbox-mcp": {
+      "command": "physbox-mcp",
+      "args": ["--stdio"]
+    }
+  }
+}
+```
+
+#### For Claude Code
+Add a `.mcp.json` file to your project root (or update your global configuration at `~/.claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "physbox-mcp": {
+      "type": "stdio",
+      "command": "physbox-mcp",
+      "args": ["--stdio"]
+    }
+  }
+}
+```
+
+### 3. Run the Companion Server Manually (Optional)
+If you are running the server in HTTP mode rather than Stdio, you can run:
+
+```bash
+# Starts HTTP server listening on port 3141 (default)
+physbox-mcp
+```
+
+Or configure custom port parameters:
+```bash
+physbox-mcp --port=4000
+```
+
+---
+
+## Development & Contribution
+For instructions on local development, modifying schemas, extending tool definitions, and manual builds, please refer to [README_DEV.md](file:///wsl.localhost/Ubuntu-20.04/home/boab/expt_mcp/README_DEV.md).

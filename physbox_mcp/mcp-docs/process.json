@@ -1,0 +1,406 @@
+{
+  "tools": {
+    "process_get_state": "Return full Process Expert state: nodes, edges, isRunning, activePreset.",
+    "process_get_metrics": "Return per-node simulation metrics: id, label, type, state.",
+    "process_start": "Start the simulation in Process Expert.",
+    "process_stop": "Stop (pause) the simulation in Process Expert.",
+    "process_reset": "Reset the simulation in Process Expert.",
+    "process_list_presets": "Return available built-in preset names for Process Expert.",
+    "process_load_preset": "Load a named preset in Process Expert. Call process_list_presets first.",
+    "process_get_library": "Return the user's saved diagram library from localStorage.",
+    "process_save_library": "Save the current diagram to the user library under the given name.",
+    "process_set_nodes": "Replace all nodes in the Process Expert canvas.",
+    "process_set_edges": "Replace all edges in the Process Expert canvas.",
+    "process_run_headless": "Run Process Expert headlessly for N ticks without disturbing the live view. Returns per-node final states. 60 ticks ≈ 1 second.",
+    "process_get_history": "Return the tick-by-tick simulation history logs for plotting.",
+    "process_run_monte_carlo": "Run a Monte Carlo simulation headlessly on the current Process Expert canvas. Aggregates numeric variables across runs and returns mean (avg) and standard deviation (stdDev). Runs default to 100 and ticks to 3600.",
+    "process_run_optimizer": "Run a parameter sweep optimizer headlessly on the current Process Expert canvas. Sweeps the parameter space and returns the best and top 5 parameter configurations.\n\ntargetMetric: format 'nodeId.key' (e.g. 'wf_ops.value')\nparams: list of dicts: [{'nodeId': '...', 'key': '...', 'min': 0, 'max': 15, 'step': 1}]\nmode: 'maximize' or 'minimize'\nstrategy: 'grid_sweep' or 'genetic'\npopulationSize: genetic algorithm population size (default: 12)\ngenerations: genetic algorithm generations (default: 6)\nmutationRate: genetic algorithm mutation rate (default: 0.25)",
+    "process_get_schema": "Return the Process Expert schema describing NodeTypes, ProcessNodeData fields, ProcessEdgeData fields, and Custom Code API context features."
+  },
+  "schema": {
+    "nodeTypes": [
+      "stock",
+      "cloud",
+      "machine",
+      "source_simple",
+      "custom",
+      "callLLM",
+      "resource",
+      "userInput",
+      "webhook",
+      "websocket",
+      "router",
+      "subgraph",
+      "gridNode",
+      "markdownNode",
+      "sink",
+      "source"
+    ],
+    "nodeTypesDetail": {
+      "stock": {
+        "description": "Continuous accumulator in System Dynamics (SD) modeling. Stores a numeric quantity that changes smoothly over ticks based on connected inflow/outflow edge flow rates.",
+        "stateFields": {
+          "value": "number — current quantity/level (continuous state)",
+          "_initialValue": "number — reset value when simulation restarts"
+        },
+        "routing": "Flow equations are specified on outgoing/incoming edges via data.equation (e.g., 'stockA * 0.05' or constants)."
+      },
+      "cloud": {
+        "description": "Infinite source or sink boundaries for continuous System Dynamics flows. Used to represent entry or exit limits outside the modeled system.",
+        "stateFields": {
+          "value": "number — always Infinity (for sources) or accumulated discard values (for sinks)"
+        }
+      },
+      "source_simple": {
+        "description": "Discrete-event generator that periodically spawns new Entity items and pushes them downstream.",
+        "stateFields": {
+          "entityType": "string — type field for spawned entities (e.g. 'customer', 'item')",
+          "spawnRate": "number — tick interval between spawns (used for 'fixed' distribution)",
+          "spawnDistribution": "string — arrival distribution: 'fixed' | 'exponential' | 'normal' | 'uniform' | 'triangular' | 'poisson' | 'weibull'",
+          "spawnMean": "number — mean rate for exponential distribution",
+          "spawnStdDev": "number — standard deviation for normal timing",
+          "spawnMin": "number — minimum timing for uniform/triangular",
+          "spawnMax": "number — maximum timing for uniform/triangular",
+          "spawnMode": "number — mode/peak timing for triangular",
+          "spawnLambda": "number — rate parameter for poisson arrivals",
+          "payloadDistributions": "array — list of random variables sampled and merged into the spawned entity's payload (e.g. [{'key': 'severity', 'type': 'uniform', 'min': 1, 'max': 5}])"
+        }
+      },
+      "machine": {
+        "description": "Processes discrete entities pulled from its queue one at a time. Simulates delay/capacity constraints.",
+        "stateFields": {
+          "queue": "Entity[] — FIFO array of waiting items",
+          "capacity": "number — maximum queue length (entities entering a full queue are dropped)",
+          "processing": "Entity | null — entity currently in service",
+          "processingTime": "number — default service time (ticks) for 'fixed' distribution",
+          "processingTimeLeft": "number — ticks remaining before current entity completes",
+          "processingTimeDistribution": "string — timing distribution: 'fixed' | 'exponential' | 'normal' | 'uniform' | 'triangular' | 'poisson' | 'weibull'",
+          "processingTimeMean": "number — mean service time for exponential",
+          "processingTimeStdDev": "number — standard deviation for normal",
+          "processingTimeMin": "number — min duration for uniform/triangular",
+          "processingTimeMax": "number — max duration for uniform/triangular",
+          "processingTimeMode": "number — mode/peak duration for triangular"
+        }
+      },
+      "custom": {
+        "description": "Executes custom JavaScript/TypeScript code in data.code at every tick. Used for custom queuing, delays, triggers, or routing.",
+        "stateFields": {
+          "anyCustomKey": "any — user scripts can define and read arbitrary state properties directly on the state object"
+        },
+        "apiDetails": "Uses customCodeAPI (push, spawn, chance, rateLimit, processNext, randomDistributions). Custom code runs inside a secure sandbox."
+      },
+      "userInput": {
+        "description": "Implements an alert gate or approval prompt. Halts entities in its queue until approved/rejected (via buttons in the UI, Autopilot rules, or custom scripts). Also used to seize or release resources.",
+        "stateFields": {
+          "queue": "Entity[] — waiting list of alerts or entities",
+          "decision": "string | null — 'approved' | 'rejected' | null (pending user click)",
+          "seizeResource": "string — optional ID of a 'resource' node to seize before pushing approved entities",
+          "releaseResource": "string — optional ID of a 'resource' node to release after resolving entities",
+          "ruleCode": "string — rule/policy code evaluated by Autopilot to make decisions automatically (e.g., 'if (resourcePool.count > 0) approve()')"
+        },
+        "routing": "If data.code (custom JS) is defined, the engine bypasses automatic forwarding and delegates all routing to the custom script."
+      },
+      "resource": {
+        "description": "Maintains a pool of reusable resources (like workers, trucks, or servers) that can be seized/released by userInput gates or custom nodes.",
+        "stateFields": {
+          "count": "number — number of currently idle/available resource units",
+          "total": "number — total resource capacity of the pool"
+        }
+      },
+      "gridNode": {
+        "description": "Hosts a 2D grid cell Cellular Automaton (CA) simulation (e.g. fire spreading, geographic heatmaps). Cells transition concurrently.",
+        "stateFields": {
+          "grid": "number[][] — 2D numeric cell states (typically 0=empty/green, 1=burning, 2=burnt/suppressed)",
+          "gridMask": "boolean[][] — optional geographic land mask (cells marked false are treated as water/oceans and ignored)",
+          "burningCoords": "array — list of active coordination points (used by suppressing nodes to track active cells)"
+        },
+        "codeDetails": "Transition rules are specified in data.code (evaluates next cell state based on neighborhood values)."
+      },
+      "router": {
+        "description": "Routes incoming entities to target outputs by evaluating custom JS logic in data.code.",
+        "stateFields": {
+          "queue": "Entity[] — inputs are queued briefly before routing evaluations"
+        },
+        "behavior": "Custom code must evaluate to target edge label string (e.g. 'high_priority') or call push()."
+      },
+      "sink": {
+        "description": "Consumes completed discrete entities and maintains operational diagnostics (throughput, wait times).",
+        "stateFields": {
+          "_totalProcessed": "number — total entities destroyed",
+          "_totalWaitTime": "number — accumulated queue wait ticks across all consumed entities",
+          "avgWaitTime": "string — auto-calculated wait time label (e.g. '12.4 ticks')"
+        },
+        "apiDetails": "Uses the consume() helper to automatically track wait duration (tickCount - entity.payload._spawnTick) and update averages in the UI."
+      }
+    },
+    "nodeFields": {
+      "id": "string — unique node identifier",
+      "type": "string — one of nodeTypes",
+      "data": {
+        "label": "string — display label",
+        "type": "string — NodeType duplicate matching parent type",
+        "code": "string — custom JavaScript/TypeScript logic (used by 'custom', 'router', 'gridNode' cells)",
+        "state": "NodeState — node state object (numeric fields, queue, processing, processingTimeLeft)",
+        "outputs": "string[] — list of output handle/edge names",
+        "text": "string — markdown/text content for markdownNode",
+        "grid": {
+          "row": "number — grid height in cells",
+          "col": "number — grid width in cells",
+          "size": "number — cell display size in pixels",
+          "displayHint": "'continuous' | 'binary' | 'trinary' — CA height/heatmap rendering mode"
+        }
+      }
+    },
+    "edgeFields": {
+      "id": "string — unique edge identifier",
+      "source": "string — source node ID",
+      "target": "string — target node ID",
+      "data": {
+        "travelTime": "number — duration in ticks for entities to travel across the edge",
+        "rateLimit": "number — maximum entities allowed on edge per tick",
+        "equation": "string — system dynamics flow equation (for flows between stock nodes)",
+        "travelTimeDistribution": "string — statistical distribution for travel time ('fixed' | 'exponential' | 'normal' | 'uniform' | 'triangular' | 'poisson' | 'weibull')",
+        "travelTimeMean": "number — mean travel time",
+        "travelTimeStdDev": "number — standard deviation for normal distribution",
+        "travelTimeMin": "number — minimum travel time for uniform/triangular",
+        "travelTimeMax": "number — maximum travel time for uniform/triangular",
+        "travelTimeMode": "number — mode travel time for triangular",
+        "travelTimeLambda": "number — lambda for poisson distribution",
+        "travelTimeShape": "number — shape parameter for weibull",
+        "travelTimeScale": "number — scale parameter for weibull"
+      }
+    },
+    "customCodeAPI": {
+      "inputs": "Entity[] — list of incoming Entity objects (each has id, type, payload)",
+      "state": "NodeState — custom state variables dictionary",
+      "push": "function(targetHandle: string, entity: Entity) — send entity to target edge handle",
+      "spawn": "function(type: string, payload?: any) — spawn a new entity at this node",
+      "chance": "function(percent: number) -> boolean — return true based on probability percentage",
+      "rateLimit": "function(n: number) -> boolean — return true if rate limit of N entities/tick is not exceeded",
+      "processNext": "function(ticks: number, callback: (item: Entity) => void) — process entity with custom delay callback",
+      "spawnAtRate": "function(rate: number, type: string, payload?: any, handle?: string) — spawn a new entity every N ticks",
+      "spawnExponential": "function(mean: number, type: string, payload?: any, handle?: string) — spawn entity following exponential timing (Poisson arrivals)",
+      "delay": "function(ticks: number, handle?: string) — pull entity, delay by N ticks, and push downstream",
+      "delayAndTransform": "function(ticks: number, newType: string, handle?: string) — pull, delay by N ticks, mutate its type string, and push",
+      "consume": "function(callback: (item: Entity) => void) — pull entity, run callback, and auto-aggregate wait time statistics",
+      "routeByChance": "function(percent: number, trueHandle: string, falseHandle: string) — pull and route entity to true or false handle based on percentage chance",
+      "callLLM": "function(prompt: string, callback: (resultText: string) => void) — invoke Gemini LLM asynchronously and return response to callback",
+      "seize": "function(resourceName: string, amount?: number) -> boolean — attempt to allocate resources from pool, return true on success",
+      "release": "function(resourceName: string, amount?: number) -> boolean — release resources back to pool",
+      "sortByPriority": "function(field?: string, ascending?: boolean) — sort node queue by a payload priority field",
+      "getShortestQueueNode": "function(nodeLabels: string[]) -> string — return node label representing the shortest active queue",
+      "randomNormal": "function(mean: number, stdDev: number) -> number — sample from normal distribution",
+      "randomExponential": "function(rate: number) -> number — sample from exponential distribution",
+      "randomUniform": "function(min: number, max: number) -> number — sample from uniform distribution",
+      "randomChoice": "function(arr: any[]) -> any — pick a random element from an array",
+      "randomTriangular": "function(min: number, mode: number, max: number) -> number — sample from triangular distribution",
+      "randomPoisson": "function(lambda: number) -> number — sample from poisson distribution",
+      "randomWeibull": "function(shape: number, scale: number) -> number — sample from weibull distribution"
+    },
+    "examples": [
+      {
+        "title": "Stochastic Bank Queue",
+        "description": "Discrete-event system demonstrating statistical distributions in arrivals, payloads, transit, and service. A source generates VIP and standard customers, a machine desk handles them with triangular service times, and a custom telemetry node aggregates variables.",
+        "nodes": [
+          {
+            "id": "sq_source",
+            "type": "processNode",
+            "position": { "x": 100, "y": 150 },
+            "data": {
+              "label": "Entrance (Arrivals)",
+              "type": "source_simple",
+              "outputs": ["default"],
+              "code": "",
+              "state": {
+                "queue": [],
+                "processing": null,
+                "processingTimeLeft": 0,
+                "spawnType": "customer",
+                "spawnDistribution": "exponential",
+                "spawnMean": 25,
+                "payloadDistributions": [
+                  { "field": "priority", "distribution": "normal", "mean": 5, "stdDev": 2 },
+                  { "field": "deposit", "distribution": "uniform", "min": 100, "max": 5000 },
+                  { "field": "accType", "distribution": "choice", "choices": "Standard, Premium, VIP" }
+                ]
+              }
+            }
+          },
+          {
+            "id": "sq_teller",
+            "type": "processNode",
+            "position": { "x": 450, "y": 150 },
+            "data": {
+              "label": "Service Teller",
+              "type": "machine",
+              "outputs": ["default"],
+              "code": "",
+              "state": {
+                "queue": [],
+                "processing": null,
+                "processingTimeLeft": 0,
+                "processingTimeDistribution": "triangular",
+                "processingTimeMin": 10,
+                "processingTimeMode": 30,
+                "processingTimeMax": 80
+              }
+            }
+          },
+          {
+            "id": "sq_exit",
+            "type": "processNode",
+            "position": { "x": 800, "y": 150 },
+            "data": {
+              "label": "Exit & Stats",
+              "type": "custom",
+              "outputs": [],
+              "code": "let item = pull();\nwhile (item) {\n  state.count = (state.count || 0) + 1;\n  state.totalDeposit = (state.totalDeposit || 0) + (item.payload.deposit || 0);\n  state.totalPriority = (state.totalPriority || 0) + (item.payload.priority || 0);\n  state.avgPriority = Number((state.totalPriority / state.count).toFixed(2));\n  state.lastVIP = item.payload.accType === 'VIP' ? 'Yes' : (state.lastVIP || 'No');\n  item = pull();\n}",
+              "state": {
+                "queue": [],
+                "processing": null,
+                "processingTimeLeft": 0,
+                "count": 0,
+                "totalDeposit": 0,
+                "totalPriority": 0,
+                "avgPriority": 0,
+                "lastVIP": "No"
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e_sq1",
+            "source": "sq_source",
+            "target": "sq_teller",
+            "sourceHandle": "default",
+            "type": "customEdge",
+            "data": {
+              "travelTime": 20,
+              "rateLimit": 0,
+              "contents": [],
+              "travelTimeDistribution": "uniform",
+              "travelTimeMin": 15,
+              "travelTimeMax": 35
+            }
+          },
+          {
+            "id": "e_sq2",
+            "source": "sq_teller",
+            "target": "sq_exit",
+            "sourceHandle": "default",
+            "type": "customEdge",
+            "data": {
+              "travelTime": 10,
+              "rateLimit": 0,
+              "contents": []
+            }
+          }
+        ]
+      },
+      {
+        "title": "Ecology: Predator/Prey",
+        "description": "Continuous System Dynamics model mapping populations of Wolves and Rabbits. Flow equations use standard mathematical equations over node state attributes.",
+        "nodes": [
+          {
+            "id": "rabbits",
+            "type": "processNode",
+            "position": { "x": 200, "y": 150 },
+            "data": {
+              "label": "Rabbits",
+              "type": "stock",
+              "outputs": ["default"],
+              "state": {
+                "queue": [],
+                "processing": null,
+                "processingTimeLeft": 0,
+                "value": 120,
+                "birthRate": 0.5,
+                "clampFloor": true
+              },
+              "code": ""
+            }
+          },
+          {
+            "id": "wolves",
+            "type": "processNode",
+            "position": { "x": 600, "y": 150 },
+            "data": {
+              "label": "Wolves",
+              "type": "stock",
+              "outputs": ["default"],
+              "state": {
+                "queue": [],
+                "processing": null,
+                "processingTimeLeft": 0,
+                "value": 100,
+                "deathRate": 0.5,
+                "predationRate": 0.005,
+                "clampFloor": true
+              },
+              "code": ""
+            }
+          },
+          {
+            "id": "nature",
+            "type": "processNode",
+            "position": { "x": 400, "y": 300 },
+            "data": {
+              "label": "Environment",
+              "type": "cloud",
+              "outputs": ["default"],
+              "state": {
+                "queue": [],
+                "processing": null,
+                "processingTimeLeft": 0,
+                "value": 0
+              },
+              "code": ""
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "nature",
+            "target": "rabbits",
+            "sourceHandle": "default",
+            "type": "customEdge",
+            "data": {
+              "travelTime": 0,
+              "rateLimit": 0,
+              "contents": [],
+              "equation": "rabbits.birthRate * rabbits"
+            }
+          },
+          {
+            "id": "e2",
+            "source": "rabbits",
+            "target": "wolves",
+            "sourceHandle": "default",
+            "type": "customEdge",
+            "data": {
+              "travelTime": 0,
+              "rateLimit": 0,
+              "contents": [],
+              "equation": "wolves.predationRate * rabbits * wolves"
+            }
+          },
+          {
+            "id": "e3",
+            "source": "wolves",
+            "target": "nature",
+            "sourceHandle": "default",
+            "type": "customEdge",
+            "data": {
+              "travelTime": 0,
+              "rateLimit": 0,
+              "contents": [],
+              "equation": "wolves.deathRate * wolves"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
