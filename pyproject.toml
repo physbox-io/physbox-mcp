@@ -8,7 +8,7 @@ version = "2.0.0"
 description = "PhysBox: MCP - Model Context Protocol server for local simulation apps"
 readme = "README.md"
 authors = [
-    {name = "Boab", email = "boab@example.com"}
+    {name = "Tom Grek", email = "tom.grek@gmail.com"}
 ]
 requires-python = ">=3.12"
 license = {text = "MIT"}
