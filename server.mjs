@@ -645,8 +645,19 @@ async function handleTool(name, args) {
 
 // ── MCP server ────────────────────────────────────────────────────────────────
 
+let mcpVersion = "0.0.0";
+try {
+  const tomlContent = fs.readFileSync(path.join(__dirname, "pyproject.toml"), "utf8");
+  const match = tomlContent.match(/version\s*=\s*["']([^"']+)["']/);
+  if (match) {
+    mcpVersion = match[1];
+  }
+} catch (e) {
+  // ignore
+}
+
 const server = new Server(
-  { name: "physbox-mcp", version: "2.0.0" },
+  { name: "physbox-mcp", version: mcpVersion },
   { capabilities: { tools: {} } }
 );
 

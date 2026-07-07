@@ -1,6 +1,6 @@
 {
   "name": "physbox-mcp",
-  "version": "2.0.0",
+  "version": "0.0.0",
   "type": "module",
   "description": "MCP server for headless interaction with circuit, physics, and process apps via WebSocket bridge",
   "main": "server.mjs",
