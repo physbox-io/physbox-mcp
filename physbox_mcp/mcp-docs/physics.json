@@ -17,7 +17,11 @@
     "api.getOrientation() returns the 9-element row-major rotation matrix of the body the script is attached to (xmat). Column 0 = [R[0], R[3], R[6]] is the body's local X-axis in world space. For a rotor with hinge axis=[1,0,0], project wind onto this axis to get the effective wind speed: Vw = windX*R[0] + windY*R[3].",
     "physics_update_scene's sceneGraph parameter is a bare array of SceneNode objects (matching physics_build_scene's bodies convention) — NOT { nodes: [...] }. Passing the wrapped object form is tolerated but the array form is canonical.",
     "physics_build_scene and physics_update_scene now wait for any scad bodies to finish compiling and for a final MJCF recompile before responding, and report the real result as { ok, error?, nodeCount } — no need to poll physics_get_state afterward for scad-heavy scenes. This does mean the call itself can take several seconds for scenes with multiple scad bodies (each compiles sequentially).",
-    "physics_get_state.lastCompileError holds the most recent MJCF/MuJoCo compile error message (or null on success) — check this after loading a scene to see the real underlying failure reason instead of just a generic ok:false."
+    "physics_get_state.lastCompileError holds the most recent MJCF/MuJoCo compile error message (or null on success) — check this after loading a scene to see the real underlying failure reason instead of just a generic ok:false.",
+    "OpenSCAD designs in this simulator must be scaled to meters (scale([0.001, 0.001, 0.001]) { ... }) at the top-level. Leaving them in default millimeters causes meshes to render 1000x too large, breaking camera zoom bounding boxes and physics stability.",
+    "To visually verify layout, spacing, or alignment of a scene, use the physics_get_screenshot tool directly rather than launching a Puppeteer or browser instance. Spawning browser instances is slow, resource-heavy, and redundant when the direct viewport screenshot tool is available.",
+    "The browser-based WASM compiler used in the physics app (openscad-wasm) does not have system font files mounted in its virtual filesystem. Calling text() in OpenSCAD fails silently (compiles to empty geometry without errors). To draw text labels on a SCAD mesh, construct the letters manually using line segments (e.g. hull() of circles or cylinders in 2D or 3D) to guarantee cross-platform compilation.",
+    "When performing CSG difference operations in OpenSCAD (such as cutting slots, grooves, or recesses), ensure the subtracted geometries extend slightly past the outer boundaries of the main body. Perfectly coplanar faces at the cutting limits can cause degenerate triangles or rendering artifacts (like flickering or jagged ridges) in the WebGL renderer."
   ],
   "coordinateSystem": {
     "mujocoWorldSpace": "X=right, Y=forward (into screen), Z=up. Ground plane at Z=0. Gravity default: Z=-9.81.",
@@ -133,7 +137,8 @@
     },
     "openScadNotes": {
       "definition": "You can define procedural shapes using the scad property on a body node. Example: scad: 'difference() { cube([0.5,0.5,0.5], center=true); sphere(d=0.6); }'.",
-      "automaticCompilation": "If a body node specifies a scad property and geoms is omitted, the simulator automatically registers it as a dynamic mesh geom and compiles it to vertices and faces. The resulting dynamic mesh behaves as a physical body with collision detection."
+      "automaticCompilation": "If a body node specifies a scad property and geoms is omitted, the simulator automatically registers it as a dynamic mesh geom and compiles it to vertices and faces. The resulting dynamic mesh behaves as a physical body with collision detection.",
+      "scalingWarning": "MuJoCo units are in meters, whereas standard OpenSCAD designs are in millimeters. You MUST wrap your top-level modules or calls in a scale([0.001, 0.001, 0.001]) block. Failing to do so compiles the mesh 1000x larger, which breaks rendering, zoom bounds, and physics stability."
     },
     "tips": [
       "Compound shapes: add multiple geoms to one body with different pos/quat/euler offsets",

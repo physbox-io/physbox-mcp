@@ -45,7 +45,6 @@ function loadMcpDocs(appId) {
 const physicsDocs = loadMcpDocs("physics");
 const processDocs = loadMcpDocs("process");
 const circuitDocs = loadMcpDocs("circuit");
-const chemistryDocs = loadMcpDocs("chemistry");
 
 // ── App registry ─────────────────────────────────────────────────────────────
 
@@ -53,7 +52,6 @@ const APPS = {
   process: { port: 5173, name: "Flux" },
   circuit: { port: 5174, name: "Volt" },
   physics: { port: 5175, name: "Mesh" },
-  chemistry: { port: 5176, name: "Chemistry Sim" },
 };
 
 // ── Connection pool ───────────────────────────────────────────────────────────
@@ -540,138 +538,6 @@ const TOOLS = [
       }
     }
   },
-  // ── Chemistry Sim ──────────────────────────────────────────────
-  {
-    name: "chemistry_get_state",
-    description: chemistryDocs?.tools?.chemistry_get_state || "Return Chemistry Sim state.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "chemistry_start",
-    description: chemistryDocs?.tools?.chemistry_start || "Start simulation ticks.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "chemistry_stop",
-    description: chemistryDocs?.tools?.chemistry_stop || "Stop/pause simulation ticks.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "chemistry_reset",
-    description: chemistryDocs?.tools?.chemistry_reset || "Reset simulation.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "chemistry_clear",
-    description: chemistryDocs?.tools?.chemistry_clear || "Clear all nodes and edges.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "chemistry_list_presets",
-    description: chemistryDocs?.tools?.chemistry_list_presets || "List built-in presets.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "chemistry_load_preset",
-    description: chemistryDocs?.tools?.chemistry_load_preset || "Load a named preset.",
-    inputSchema: {
-      type: "object",
-      required: ["preset"],
-      properties: { preset: { type: "string" } },
-    },
-  },
-  {
-    name: "chemistry_set_nodes",
-    description: chemistryDocs?.tools?.chemistry_set_nodes || "Replace all nodes.",
-    inputSchema: {
-      type: "object",
-      required: ["nodes"],
-      properties: { nodes: { type: "array" } },
-    },
-  },
-  {
-    name: "chemistry_set_edges",
-    description: chemistryDocs?.tools?.chemistry_set_edges || "Replace all edges.",
-    inputSchema: {
-      type: "object",
-      required: ["edges"],
-      properties: { edges: { type: "array" } },
-    },
-  },
-  {
-    name: "chemistry_dispense_reagent",
-    description: chemistryDocs?.tools?.chemistry_dispense_reagent || "Dispense reagent into a vessel.",
-    inputSchema: {
-      type: "object",
-      required: ["nodeId", "reagentId", "volume"],
-      properties: {
-        nodeId: { type: "string" },
-        reagentId: { type: "string" },
-        volume: { type: "number" },
-      },
-    },
-  },
-  {
-    name: "chemistry_pour_vessel",
-    description: chemistryDocs?.tools?.chemistry_pour_vessel || "Pour entire contents of one vessel to another.",
-    inputSchema: {
-      type: "object",
-      required: ["sourceId", "targetId"],
-      properties: {
-        sourceId: { type: "string" },
-        targetId: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "chemistry_set_node_properties",
-    description: chemistryDocs?.tools?.chemistry_set_node_properties || "Set node properties.",
-    inputSchema: {
-      type: "object",
-      required: ["nodeId", "properties"],
-      properties: {
-        nodeId: { type: "string" },
-        properties: { type: "object" },
-      },
-    },
-  },
-  {
-    name: "chemistry_run_headless",
-    description: chemistryDocs?.tools?.chemistry_run_headless || "Run simulation headlessly.",
-    inputSchema: {
-      type: "object",
-      required: ["ticks"],
-      properties: {
-        ticks: { type: "number" },
-        actions: {
-          type: "array",
-          description: "Optional array of scheduled actions to perform at specific ticks during simulation: { tick: number, type: 'dispense'|'pour'|'set_properties', ... }",
-          items: { type: "object" }
-        }
-      },
-    },
-  },
-  {
-    name: "chemistry_run_headless_final",
-    description: chemistryDocs?.tools?.chemistry_run_headless_final || "Run simulation headlessly, returning only final states.",
-    inputSchema: {
-      type: "object",
-      required: ["ticks"],
-      properties: {
-        ticks: { type: "number" },
-        actions: {
-          type: "array",
-          description: "Optional array of scheduled actions to perform at specific ticks during simulation: { tick: number, type: 'dispense'|'pour'|'set_properties', ... }",
-          items: { type: "object" }
-        }
-      },
-    },
-  },
-  {
-    name: "chemistry_get_schema",
-    description: chemistryDocs?.tools?.chemistry_get_schema || "Return Chemistry schema.",
-    inputSchema: { type: "object", properties: {} },
-  },
 ];
 
 // ── Tool handler ──────────────────────────────────────────────────────────────
@@ -680,7 +546,6 @@ async function handleTool(name, args) {
   const P = APPS.process.port;
   const C = APPS.circuit.port;
   const Ph = APPS.physics.port;
-  const Ch = APPS.chemistry.port;
 
   switch (name) {
 
@@ -772,41 +637,6 @@ async function handleTool(name, args) {
     case "physics_get_telemetry":  return getConn(Ph).send("GET_TELEMETRY");
     case "physics_get_note_cards": return getConn(Ph).send("GET_NOTE_CARDS");
     case "physics_set_note_cards": return getConn(Ph).send("SET_NOTE_CARDS", { noteCards: args.noteCards });
-
-    // ── Chemistry ──────────────────────────────────────────────────
-    case "chemistry_get_state":      return getConn(Ch).send("GET_STATE");
-    case "chemistry_start":          return getConn(Ch).send("START_SIM");
-    case "chemistry_stop":           return getConn(Ch).send("STOP_SIM");
-    case "chemistry_reset":          return getConn(Ch).send("RESET_SIM");
-    case "chemistry_clear":          return getConn(Ch).send("CLEAR_CANVAS");
-    case "chemistry_list_presets":   return getConn(Ch).send("LIST_PRESETS");
-    case "chemistry_load_preset":    return getConn(Ch).send("LOAD_PRESET", { preset: args.preset });
-    case "chemistry_set_nodes":      return getConn(Ch).send("SET_NODES", { nodes: args.nodes });
-    case "chemistry_set_edges":      return getConn(Ch).send("SET_EDGES", { edges: args.edges });
-    case "chemistry_dispense_reagent":
-      return getConn(Ch).send("DISPENSE_REAGENT", {
-        nodeId: args.nodeId,
-        reagentId: args.reagentId,
-        volume: args.volume,
-      });
-    case "chemistry_pour_vessel":
-      return getConn(Ch).send("POUR_VESSEL", {
-        sourceId: args.sourceId,
-        targetId: args.targetId,
-      });
-    case "chemistry_set_node_properties":
-      return getConn(Ch).send("SET_NODE_PROPERTIES", {
-        nodeId: args.nodeId,
-        properties: args.properties,
-      });
-    case "chemistry_run_headless":
-      return getConn(Ch).send("RUN_HEADLESS", { ticks: args.ticks, actions: args.actions }, 30000);
-    case "chemistry_run_headless_final":
-      return getConn(Ch).send("RUN_HEADLESS_FINAL", { ticks: args.ticks, actions: args.actions }, 30000);
-    case "chemistry_get_schema": {
-      const freshDocs = loadMcpDocs("chemistry");
-      return freshDocs.schema || chemistryDocs.schema || {};
-    }
 
     default:
       throw new Error(`Unknown tool: ${name}`);

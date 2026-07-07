@@ -80,6 +80,40 @@ Add a `.mcp.json` file to your project root (or update your global configuration
 }
 ```
 
+#### For Google Antigravity IDE
+
+On Windows/WSL setups, Antigravity IDE reads configuration from the global configuration directory. Because the global directory (`~/.gemini/config/`) may be write-restricted, you should link it to the writable `~/.gemini/antigravity/` folder:
+
+1. In PowerShell, create a **Hard Link** from the global configuration target to the writable user directory:
+   ```powershell
+   # Delete the empty placeholder file if it exists
+   Remove-Item -Path "$env:USERPROFILE\.gemini\config\mcp_config.json" -Force -ErrorAction SilentlyContinue
+   
+   # Create a Hard Link to the writable copy
+   New-Item -ItemType HardLink -Path "$env:USERPROFILE\.gemini\config\mcp_config.json" -Target "$env:USERPROFILE\.gemini\antigravity\mcp_config.json"
+   ```
+
+2. Add the `physbox-mcp` WSL configuration to your `mcp_config.json` (which maps automatically to the hard-linked destination):
+   ```json
+   {
+     "mcpServers": {
+       "physbox-mcp": {
+         "command": "C:\\Windows\\system32\\wsl.exe",
+         "args": [
+           "-d",
+           "Ubuntu-20.04",
+           "/home/boab/physbox_mcp/venv/bin/python",
+           "/home/boab/physbox_mcp/physbox_mcp/server.py",
+           "--stdio"
+         ]
+       }
+     }
+   }
+   ```
+
+3. **Restart the IDE** (or close and reload the agent chat session) to register the MCP tools natively.
+
+
 ### 3. Run the Companion Server Manually (Optional)
 If you are running the server in HTTP mode rather than Stdio, you can run:
 

@@ -39,7 +39,6 @@ APPS = {
     "process": {"port": 5173, "name": "Flux"},
     "circuit": {"port": 5174, "name": "Volt"},
     "physics": {"port": 5175, "name": "Mesh"},
-    "chemistry": {"port": 5176, "name": "Chemistry Sim"},
 }
 
 # ── Connection pool ───────────────────────────────────────────────────────────
@@ -99,7 +98,6 @@ def load_mcp_docs(app_id: str) -> dict:
 physics_docs = load_mcp_docs("physics")
 process_docs = load_mcp_docs("process")
 circuit_docs = load_mcp_docs("circuit")
-chemistry_docs = load_mcp_docs("chemistry")
 
 
 def get_conn(port: int) -> AppConnection:
@@ -196,7 +194,6 @@ mcp = FastMCP(
 P  = APPS["process"]["port"]
 C  = APPS["circuit"]["port"]
 Ph = APPS["physics"]["port"]
-Ch = APPS["chemistry"]["port"]
 
 
 # ── Universal ─────────────────────────────────────────────────────────────────
@@ -494,69 +491,6 @@ async def physics_get_note_cards() -> Any:
 @mcp.tool(description=physics_docs.get("tools", {}).get("physics_set_note_cards", "Replace the note card overlays"))
 async def physics_set_note_cards(noteCards: list) -> Any:
     return await get_conn(Ph).send("SET_NOTE_CARDS", {"noteCards": noteCards})
-
-
-# ── Chemistry Sim ─────────────────────────────────────────────────────────────
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_get_state", "Return Chemistry Sim state"))
-async def chemistry_get_state() -> Any:
-    return await get_conn(Ch).send("GET_STATE")
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_start", "Start simulation ticks"))
-async def chemistry_start() -> Any:
-    return await get_conn(Ch).send("START_SIM")
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_stop", "Stop simulation ticks"))
-async def chemistry_stop() -> Any:
-    return await get_conn(Ch).send("STOP_SIM")
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_reset", "Reset simulation"))
-async def chemistry_reset() -> Any:
-    return await get_conn(Ch).send("RESET_SIM")
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_clear", "Clear all nodes and edges"))
-async def chemistry_clear() -> Any:
-    return await get_conn(Ch).send("CLEAR_CANVAS")
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_list_presets", "List built-in presets"))
-async def chemistry_list_presets() -> Any:
-    return await get_conn(Ch).send("LIST_PRESETS")
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_load_preset", "Load a named preset"))
-async def chemistry_load_preset(preset: str) -> Any:
-    return await get_conn(Ch).send("LOAD_PRESET", {"preset": preset})
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_set_nodes", "Replace all nodes"))
-async def chemistry_set_nodes(nodes: list) -> Any:
-    return await get_conn(Ch).send("SET_NODES", {"nodes": nodes})
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_set_edges", "Replace all edges"))
-async def chemistry_set_edges(edges: list) -> Any:
-    return await get_conn(Ch).send("SET_EDGES", {"edges": edges})
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_dispense_reagent", "Dispense reagent into a vessel"))
-async def chemistry_dispense_reagent(nodeId: str, reagentId: str, volume: float) -> Any:
-    return await get_conn(Ch).send("DISPENSE_REAGENT", {"nodeId": nodeId, "reagentId": reagentId, "volume": volume})
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_pour_vessel", "Pour entire contents of one vessel to another"))
-async def chemistry_pour_vessel(sourceId: str, targetId: str) -> Any:
-    return await get_conn(Ch).send("POUR_VESSEL", {"sourceId": sourceId, "targetId": targetId})
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_set_node_properties", "Set node properties"))
-async def chemistry_set_node_properties(nodeId: str, properties: dict) -> Any:
-    return await get_conn(Ch).send("SET_NODE_PROPERTIES", {"nodeId": nodeId, "properties": properties})
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_run_headless", "Run simulation headlessly"))
-async def chemistry_run_headless(ticks: int = 60, actions: list | None = None) -> Any:
-    return await get_conn(Ch).send("RUN_HEADLESS", {"ticks": ticks, "actions": actions}, timeout=30.0)
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_run_headless_final", "Run simulation headlessly, returning only final states."))
-async def chemistry_run_headless_final(ticks: int = 60, actions: list | None = None) -> Any:
-    return await get_conn(Ch).send("RUN_HEADLESS_FINAL", {"ticks": ticks, "actions": actions}, timeout=30.0)
-
-@mcp.tool(description=chemistry_docs.get("tools", {}).get("chemistry_get_schema", "Return Chemistry schema"))
-async def chemistry_get_schema() -> Any:
-    return chemistry_docs.get("schema", {})
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

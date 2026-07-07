@@ -55,7 +55,6 @@ Since users should be able to run `physbox-mcp` standalone (without cloning the 
 *   `physbox_mcp/mcp-docs/physics.json` (synced from `~/physics/mcp-docs.json`)
 *   `physbox_mcp/mcp-docs/circuit.json` (synced from `~/circuit/mcp-docs.json`)
 *   `physbox_mcp/mcp-docs/process.json` (synced from `~/process/mcp-docs.json`)
-*   `physbox_mcp/mcp-docs/chemistry.json` (synced from `~/chemistry/mcp-docs.json`)
 
 **Important:** When editing or adding tools inside any of the simulation apps, you must copy their updated `mcp-docs.json` into the `physbox_mcp/mcp-docs/` folder here so the MCP server reflects the updated schemas.
 
