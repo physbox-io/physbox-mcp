@@ -484,6 +484,18 @@ async def physics_get_history() -> Any:
 async def physics_get_telemetry() -> Any:
     return await get_conn(Ph).send("GET_TELEMETRY")
 
+@mcp.tool(description=physics_docs.get("tools", {}).get("physics_get_objects", "Return all objects in the physics scene graph with large mesh arrays stripped (useful to get SCAD and scripts without massive payload)"))
+async def physics_get_objects() -> Any:
+    return await get_conn(Ph).send("GET_OBJECTS")
+
+@mcp.tool(description=physics_docs.get("tools", {}).get("physics_get_object", "Return a single object by ID from the physics scene graph with large mesh arrays stripped"))
+async def physics_get_object(id: str) -> Any:
+    return await get_conn(Ph).send("GET_OBJECT", {"id": id})
+
+@mcp.tool(description=physics_docs.get("tools", {}).get("physics_update_object", "Update a single object by ID in the physics scene graph. The updates parameter is a partial object containing any fields from nodeFields (such as scad, pos, euler, script, joints, or geoms) to update and recompile on-the-fly."))
+async def physics_update_object(id: str, updates: dict) -> Any:
+    return await get_conn(Ph).send("UPDATE_OBJECT", {"id": id, "updates": updates}, timeout=60.0)
+
 @mcp.tool(description=physics_docs.get("tools", {}).get("physics_get_note_cards", "Return the current array of note card overlays"))
 async def physics_get_note_cards() -> Any:
     return await get_conn(Ph).send("GET_NOTE_CARDS")

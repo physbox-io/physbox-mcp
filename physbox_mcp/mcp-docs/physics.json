@@ -47,6 +47,9 @@
     "physics_run_headless": "Run the physics simulation headlessly for N ticks. Returns trajectory: [{time, bodies:{name:{pos,vel,angvel,xfrc_applied}}, joints:{name:{pos,vel,qfrc_applied}}, contacts:[{geom1,geom2,dist}], aeroDiagnostics:{name:{relSpeed,alpha,CL,CD,force,torque}}}], warnings:[string]. Does not affect the live view. Use this to verify scene behaviour programmatically — e.g. check a projectile lands in the right place, a pendulum reaches the right angle, or a body comes to rest at the expected position — before calling physics_play for visual presentation.",
     "physics_get_history": "Return the complete array of physical telemetry history up to 5000 frames (contains time, bodies, joints, contacts, and aeroDiagnostics). Large payload.",
     "physics_get_telemetry": "Return only the latest single frame of simulation telemetry (contains time, bodies: { name: { pos, vel, angvel, xfrc_applied } }, joints: { name: { pos, vel, qfrc_applied } }, contacts, and aeroDiagnostics). Lightweight alternative to physics_get_history.",
+    "physics_get_objects": "Return all objects in the physics scene graph with large mesh arrays stripped (useful to get SCAD and scripts without massive payload).",
+    "physics_get_object": "Return a single object by ID from the physics scene graph with large mesh arrays stripped.",
+    "physics_update_object": "Update a single object by ID in the physics scene graph. The updates parameter is a partial object containing any fields from nodeFields (such as scad, pos, euler, script, joints, or geoms) to update and recompile on-the-fly.",
     "physics_get_note_cards": "Return the current array of note card overlays. Each card has { id, markdown, minimized, x, y }.",
     "physics_set_note_cards": "Replace the note card overlays. Pass noteCards: [{ id, markdown, minimized, x, y }]. Use to add explanatory notes, update existing cards, or clear all cards (pass an empty array)."
   },
