@@ -130,4 +130,4 @@ physbox-mcp --port=4000
 ---
 
 ## Development & Contribution
-For instructions on local development, modifying schemas, extending tool definitions, and manual builds, please refer to [README_DEV.md](file:///wsl.localhost/Ubuntu-20.04/home/boab/expt_mcp/README_DEV.md).
+For instructions on local development, modifying schemas, extending tool definitions, and manual builds, please refer to [README_DEV.md](file:///wsl.localhost/Ubuntu-20.04/home/boab/physbox_mcp/README_DEV.md).

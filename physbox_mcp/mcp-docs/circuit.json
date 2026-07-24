@@ -1,5 +1,5 @@
 {
-  "overview": "Circuit Expert is a browser-based interactive electronics circuit playground. It uses a WASM-compiled ngspice simulator (via @tscircuit/ngspice-spice-engine) to run SPICE-accurate transient simulations. The canvas is built using React Flow, where components are nodes and connections are edges. In addition to analog components, it integrates logic gates and a Javascript-sandboxed Microcontroller (MCU) simulator for hybrid digital/analog designs. Coordinate system: standard canvas coordinates (X increases right, Y increases down).",
+  "overview": "PhysBox: Volt is a browser-based interactive electronics circuit playground. It uses a WASM-compiled ngspice simulator (via @tscircuit/ngspice-spice-engine) to run SPICE-accurate transient simulations. The canvas is built using React Flow, where components are nodes and connections are edges. In addition to analog components, it integrates logic gates and a Javascript-sandboxed Microcontroller (MCU) simulator for hybrid digital/analog designs. Coordinate system: standard canvas coordinates (X increases right, Y increases down).",
   "workflow": [
     "1. Call circuit_get_schema to find the list of supported components, their parameters, and connection terminal names.",
     "2. Use circuit_get_state to check the current canvas state: which nodes (components) and edges (wires) are loaded.",
@@ -22,15 +22,15 @@
     "spacing": "Ensure components are spaced sufficiently (typically 100-300 units apart) so that their ports can be easily connected without overlapping wires."
   },
   "tools": {
-    "circuit_get_state": "Return full Circuit Expert state: nodes, edges, isSimulating, selectedPreset, probeMode.",
+    "circuit_get_state": "Return full PhysBox: Volt state: nodes, edges, isSimulating, selectedPreset, probeMode.",
     "circuit_get_components": "Return all circuit components (nodes) with positions and data.",
-    "circuit_run_sim": "Trigger the SPICE simulation in Circuit Expert.",
+    "circuit_run_sim": "Trigger the SPICE simulation in PhysBox: Volt.",
     "circuit_stop_sim": "Stop the running SPICE simulation.",
     "circuit_toggle_probe": "Toggle probe mode (click a wire to inspect voltage).",
     "circuit_load_preset": "Load a named circuit preset.",
-    "circuit_set_nodes": "Replace all components in the Circuit Expert canvas.",
-    "circuit_set_edges": "Replace all wires in the Circuit Expert canvas.",
-    "circuit_get_schema": "Return the Circuit Expert component schema, state fields, and SPICE model specifications.",
+    "circuit_set_nodes": "Replace all components in the PhysBox: Volt canvas.",
+    "circuit_set_edges": "Replace all wires in the PhysBox: Volt canvas.",
+    "circuit_get_schema": "Return the PhysBox: Volt component schema, state fields, and SPICE model specifications.",
     "circuit_get_waveforms": "Return transient waveforms (voltage/current time series) for all components and wires after simulation runs.",
     "circuit_upload_audio": "Upload audio samples to a microphone node.",
     "circuit_download_audio": "Download audio waveforms from a speaker node, optionally interpolated."

@@ -9,16 +9,26 @@ This repository contains the companion Model Context Protocol (MCP) server for t
 Browsers can only run as WebSocket clients, not servers. The companion server acts as a central broker:
 1. It hosts an MCP server (via stdio or HTTP).
 2. It hosts a WebSocket relay server on port `3142`.
-3. When the user opens a PhysBox web application (e.g., Physics Sim) in their browser, the web application connects to the WebSocket relay.
-4. When Claude executes an MCP tool, the command is forwarded over the WebSocket connection to the browser tab, which processes the physics/circuit/process simulation and returns the results back through the relay.
+3. When the user opens a PhysBox web application (e.g., PhysBox: Mesh) in their browser, the web application connects to the WebSocket relay.
+4. When an AI Assistant (e.g., Claude, Antigravity) executes an MCP tool, the command is forwarded over the WebSocket connection to the browser tab, which processes the physics/circuit/process simulation and returns the results back through the relay.
+
+### Multi-Client Peer Relay & Failover
+To allow multiple AI assistants (e.g., Claude Desktop/CLI and Antigravity) to run simultaneously without port conflicts or forced restarts:
+- **Primary Hub Mode**: The first `physbox-mcp` process to launch binds port `3142` and acts as the primary WebSocket server for browser connections.
+- **Secondary Peer Mode**: Subsequent `physbox-mcp` processes detect that port `3142` is bound and connect as WebSocket peer clients to the Primary Hub. Tool calls from secondary instances are seamlessly relayed through the Primary Hub to the browser tabs.
+- **Automatic Failover**: If the primary process exits, secondary processes automatically detect the disconnect and attempt to bind port `3142` to promote themselves to Primary Hub mode.
 
 ```
-MCP Client (e.g. Claude Code)
-  └── spawns → physbox-mcp (stdio)
-                 └── WebSocket Server (ws://localhost:3142)
-                                ├── Flux (Port 5173)
-                                ├── Volt (Port 5174)
-                                └── Mesh (Port 5175)
+Primary MCP Client (e.g. Claude)
+  └── spawns → physbox-mcp (stdio) [Primary Hub]
+                 ├── WebSocket Server (ws://localhost:3142)
+                 │              ├── Flux (Port 5173)
+                 │              ├── Volt (Port 5174)
+                 │              └── Mesh (Port 5175)
+                 └── Peer WS Connection
+                         ^
+Secondary MCP Client (e.g. Antigravity)
+  └── spawns → physbox-mcp (stdio) [Secondary Peer Relay]
 ```
 
 ---
@@ -27,19 +37,19 @@ MCP Client (e.g. Claude Code)
 
 ### 1. Prerequisite Repositories
 The full workspace is structured with the following sibling repositories:
-*   `~/physics` — The rigid-body physics simulator app (MuJoCo WASM).
-*   `~/circuit` — The SPICE circuit simulator app (NgSpice WASM).
-*   `~/process` — The discrete-event / system-dynamics simulation app.
-*   `~/expt_mcp` — This repository (the companion MCP bridge).
+*   `~/physics` — PhysBox: Mesh rigid-body physics simulator app (MuJoCo WASM).
+*   `~/circuit` — PhysBox: Volt SPICE circuit simulator app (NgSpice WASM).
+*   `~/process` — PhysBox: Flux discrete-event / system-dynamics simulation app.
+*   `~/physbox_mcp` — This repository (the companion MCP bridge).
 
 ### 2. Installing Dependencies
-To set up both the Node.js and Python environments, run:
+To set up the Python environment, run:
 ```bash
 ./setup.sh
 ```
-This script will run `npm install` and create a local Python virtual environment (`venv/`) installing all dependencies listed in `requirements.txt`.
+This script will create a local Python virtual environment (`venv/`), install all dependencies listed in `requirements.txt`, and install the package in editable mode.
 
-To install the Python package in editable mode for local testing:
+To manually install the Python package in editable mode for local testing:
 ```bash
 source venv/bin/activate
 pip install -e .
@@ -90,9 +100,7 @@ The `id` field is echoed back to correlate concurrent requests.
 To add a new tool or command:
 1.  **Browser side:** Inside the target app's repository, open `src/hooks/useMCPBridge.ts` (or equivalent client bridge hook). Add a new `case` to the message handler `switch` statement.
 2.  **Schema update:** Add description and parameters to `mcp-docs.json` in the app's repo, and copy it to `physbox_mcp/mcp-docs/` in this repo.
-3.  **Server side:**
-    *   **Python:** Register the new `@mcp.tool()` in [server.py](file:///wsl.localhost/Ubuntu-20.04/home/boab/expt_mcp/physbox_mcp/server.py).
-    *   **Node.js:** Register the new tool in `server.mjs`.
+3.  **Server side:** Register the new `@mcp.tool()` in [server.py](file:///wsl.localhost/Ubuntu-20.04/home/boab/physbox_mcp/physbox_mcp/server.py).
 
 ---
 

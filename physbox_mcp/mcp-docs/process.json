@@ -1,21 +1,21 @@
 {
   "tools": {
-    "process_get_state": "Return full Process Expert state: nodes, edges, isRunning, activePreset.",
+    "process_get_state": "Return full PhysBox: Flux state: nodes, edges, isRunning, activePreset.",
     "process_get_metrics": "Return per-node simulation metrics: id, label, type, state.",
-    "process_start": "Start the simulation in Process Expert.",
-    "process_stop": "Stop (pause) the simulation in Process Expert.",
-    "process_reset": "Reset the simulation in Process Expert.",
-    "process_list_presets": "Return available built-in preset names for Process Expert.",
-    "process_load_preset": "Load a named preset in Process Expert. Call process_list_presets first.",
+    "process_start": "Start the simulation in PhysBox: Flux.",
+    "process_stop": "Stop (pause) the simulation in PhysBox: Flux.",
+    "process_reset": "Reset the simulation in PhysBox: Flux.",
+    "process_list_presets": "Return available built-in preset names for PhysBox: Flux.",
+    "process_load_preset": "Load a named preset in PhysBox: Flux. Call process_list_presets first.",
     "process_get_library": "Return the user's saved diagram library from localStorage.",
     "process_save_library": "Save the current diagram to the user library under the given name.",
-    "process_set_nodes": "Replace all nodes in the Process Expert canvas.",
+    "process_set_nodes": "Replace all nodes in the PhysBox: Flux canvas.",
     "process_set_edges": "Replace all edges in the Process Expert canvas.",
-    "process_run_headless": "Run Process Expert headlessly for N ticks without disturbing the live view. Returns per-node final states. 60 ticks ≈ 1 second.",
+    "process_run_headless": "Run PhysBox: Flux headlessly for N ticks without disturbing the live view. Returns per-node final states. 60 ticks ≈ 1 second.",
     "process_get_history": "Return the tick-by-tick simulation history logs for plotting.",
-    "process_run_monte_carlo": "Run a Monte Carlo simulation headlessly on the current Process Expert canvas. Aggregates numeric variables across runs and returns mean (avg) and standard deviation (stdDev). Runs default to 100 and ticks to 3600.",
-    "process_run_optimizer": "Run a parameter sweep optimizer headlessly on the current Process Expert canvas. Sweeps the parameter space and returns the best and top 5 parameter configurations.\n\ntargetMetric: format 'nodeId.key' (e.g. 'wf_ops.value')\nparams: list of dicts: [{'nodeId': '...', 'key': '...', 'min': 0, 'max': 15, 'step': 1}]\nmode: 'maximize' or 'minimize'\nstrategy: 'grid_sweep' or 'genetic'\npopulationSize: genetic algorithm population size (default: 12)\ngenerations: genetic algorithm generations (default: 6)\nmutationRate: genetic algorithm mutation rate (default: 0.25)",
-    "process_get_schema": "Return the Process Expert schema describing NodeTypes, ProcessNodeData fields, ProcessEdgeData fields, and Custom Code API context features."
+    "process_run_monte_carlo": "Run a Monte Carlo simulation headlessly on the current PhysBox: Flux canvas. Aggregates numeric variables across runs and returns mean (avg) and standard deviation (stdDev). Runs default to 100 and ticks to 3600.",
+    "process_run_optimizer": "Run a parameter sweep optimizer headlessly on the current PhysBox: Flux canvas. Sweeps the parameter space and returns the best and top 5 parameter configurations.\n\ntargetMetric: format 'nodeId.key' (e.g. 'wf_ops.value')\nparams: list of dicts: [{'nodeId': '...', 'key': '...', 'min': 0, 'max': 15, 'step': 1}]\nmode: 'maximize' or 'minimize'\nstrategy: 'grid_sweep' or 'genetic'\npopulationSize: genetic algorithm population size (default: 12)\ngenerations: genetic algorithm generations (default: 6)\nmutationRate: genetic algorithm mutation rate (default: 0.25)",
+    "process_get_schema": "Return the PhysBox: Flux schema describing NodeTypes, ProcessNodeData fields, ProcessEdgeData fields, and Custom Code API context features."
   },
   "schema": {
     "nodeTypes": [
