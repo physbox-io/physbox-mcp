@@ -100,7 +100,7 @@ The `id` field is echoed back to correlate concurrent requests.
 To add a new tool or command:
 1.  **Browser side:** Inside the target app's repository, open `src/hooks/useMCPBridge.ts` (or equivalent client bridge hook). Add a new `case` to the message handler `switch` statement.
 2.  **Schema update:** Add description and parameters to `mcp-docs.json` in the app's repo, and copy it to `physbox_mcp/mcp-docs/` in this repo.
-3.  **Server side:** Register the new `@mcp.tool()` in [server.py](file:///wsl.localhost/Ubuntu-20.04/home/boab/physbox_mcp/physbox_mcp/server.py).
+3.  **Server side:** Register the new `@mcp.tool()` in [server.py](physbox_mcp/server.py).
 
 ---
 

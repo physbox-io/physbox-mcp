@@ -65,7 +65,7 @@ Add the following block to your Claude Desktop configuration file (typically loc
 }
 ```
 
-#### For Claude Code
+#### For Claude Code / Local Workspace (`.mcp.json`)
 Add a `.mcp.json` file to your project root (or update your global configuration at `~/.claude/mcp.json`):
 
 ```json
@@ -80,6 +80,20 @@ Add a `.mcp.json` file to your project root (or update your global configuration
 }
 ```
 
+> **Developing from source?** If running directly from a cloned repository or virtual environment, use your Python interpreter:
+> ```json
+> {
+>   "mcpServers": {
+>     "physbox-mcp": {
+>       "type": "stdio",
+>       "command": "python",
+>       "args": ["-m", "physbox_mcp.server", "--stdio"]
+>     }
+>   }
+> }
+> ```
+> *(Replace `"python"` with the path to your virtual environment's Python executable if needed, e.g. `/path/to/venv/bin/python`)*.
+
 #### For Google Antigravity IDE
 
 On Windows/WSL setups, Antigravity IDE reads configuration from the global configuration directory. Because the global directory (`~/.gemini/config/`) may be write-restricted, you should link it to the writable `~/.gemini/antigravity/` folder:
@@ -93,7 +107,7 @@ On Windows/WSL setups, Antigravity IDE reads configuration from the global confi
    New-Item -ItemType HardLink -Path "$env:USERPROFILE\.gemini\config\mcp_config.json" -Target "$env:USERPROFILE\.gemini\antigravity\mcp_config.json"
    ```
 
-2. Add the `physbox-mcp` WSL configuration to your `mcp_config.json` (which maps automatically to the hard-linked destination):
+2. Add the `physbox-mcp` WSL configuration to your `mcp_config.json` (replacing `<your-wsl-distro>` with your WSL distribution such as `Ubuntu-20.04`):
    ```json
    {
      "mcpServers": {
@@ -101,15 +115,15 @@ On Windows/WSL setups, Antigravity IDE reads configuration from the global confi
          "command": "C:\\Windows\\system32\\wsl.exe",
          "args": [
            "-d",
-           "Ubuntu-20.04",
-           "/home/boab/physbox_mcp/venv/bin/python",
-           "/home/boab/physbox_mcp/physbox_mcp/server.py",
+           "<your-wsl-distro>",
+           "physbox-mcp",
            "--stdio"
          ]
        }
      }
    }
    ```
+   *(If developing from source in WSL, pass your virtual environment's Python binary and `-m physbox_mcp.server` in `args` instead).*
 
 3. **Restart the IDE** (or close and reload the agent chat session) to register the MCP tools natively.
 
@@ -130,4 +144,4 @@ physbox-mcp --port=4000
 ---
 
 ## Development & Contribution
-For instructions on local development, modifying schemas, extending tool definitions, and manual builds, please refer to [README_DEV.md](file:///wsl.localhost/Ubuntu-20.04/home/boab/physbox_mcp/README_DEV.md).
+For instructions on local development, modifying schemas, extending tool definitions, and manual builds, please refer to [README_DEV.md](README_DEV.md).
