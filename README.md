@@ -4,7 +4,7 @@ PhysBox: MCP is a Model Context Protocol (MCP) server that enables LLMs and MCP 
 
 | Application | Production URL | Description |
 |---|---|---|
-| **Flux** | [flux.physbox.io](https://flux.physbox.io) | Discrete-event / system-dynamics simulation (interactive React Flow graph) |
+| **Flux** (Beta) | [flux.physbox.io](https://flux.physbox.io) | Discrete-event / system-dynamics simulation (interactive React Flow graph) |
 | **Volt** | [volt.physbox.io](https://volt.physbox.io) | SPICE circuit simulation (powered by NgSpice WASM in browser) |
 | **Mesh** | [mesh.physbox.io](https://mesh.physbox.io) | Rigid-body physics simulation (powered by MuJoCo WASM in browser) |
 

@@ -361,7 +361,7 @@ threading.Thread(target=start_ws_bridge, daemon=True).start()
 mcp = FastMCP(
     "physbox-mcp",
     instructions=(
-        "PhysBox: MCP - Model Context Protocol server for Flux (5173), Volt (5174), Mesh (5175). "
+        "PhysBox: MCP - Model Context Protocol server for Volt (5174), Mesh (5175), and Flux (Beta) (5173). "
         "Call detect_apps first to confirm which apps are running."
     ),
 )
@@ -494,6 +494,14 @@ async def circuit_get_state() -> Any:
 async def circuit_get_components() -> Any:
     return await get_conn(C).send("GET_COMPONENTS")
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_get_edges", "Get wires/edges list"))
+async def circuit_get_edges() -> Any:
+    return await get_conn(C).send("GET_EDGES")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_get_summary", "Return lightweight circuit summary"))
+async def circuit_get_summary() -> Any:
+    return await get_conn(C).send("GET_SUMMARY")
+
 @mcp.tool(description=get_doc(circuit_docs, "circuit_run_sim", "Run SPICE simulation"))
 async def circuit_run_sim() -> Any:
     return await get_conn(C).send("RUN_SIM")
@@ -506,9 +514,22 @@ async def circuit_stop_sim() -> Any:
 async def circuit_toggle_probe() -> Any:
     return await get_conn(C).send("TOGGLE_PROBE")
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_list_presets", "List built-in and user circuit presets"))
+async def circuit_list_presets() -> Any:
+    return await get_conn(C).send("LIST_PRESETS")
+
 @mcp.tool(description=get_doc(circuit_docs, "circuit_load_preset", "Load Volt preset"))
 async def circuit_load_preset(preset: str) -> Any:
     return await get_conn(C).send("LOAD_PRESET", {"preset": preset})
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_save_preset", "Save active circuit canvas as user preset"))
+async def circuit_save_preset(name: str, noteCard: str | None = None, recommendedSimLength: float | None = None) -> Any:
+    payload = compact_dict(name=name, noteCard=noteCard, recommendedSimLength=recommendedSimLength)
+    return await get_conn(C).send("SAVE_PRESET", payload)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_delete_preset", "Delete user circuit preset by key"))
+async def circuit_delete_preset(key: str) -> Any:
+    return await get_conn(C).send("DELETE_PRESET", {"key": key})
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_set_nodes", "Set circuit components"))
 async def circuit_set_nodes(nodes: list[Any]) -> Any:
@@ -518,6 +539,15 @@ async def circuit_set_nodes(nodes: list[Any]) -> Any:
 async def circuit_set_edges(edges: list[Any]) -> Any:
     return await get_conn(C).send("SET_EDGES", {"edges": edges})
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_set_circuit", "Set both components and wires and optionally run SPICE simulation"))
+async def circuit_set_circuit(nodes: list[Any], edges: list[Any], runSim: bool = True) -> Any:
+    return await get_conn(C).send("SET_CIRCUIT", {"nodes": nodes, "edges": edges, "runSim": runSim})
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_validate_circuit", "Validate circuit nodes and wire connections for missing nodes or ground errors."))
+async def circuit_validate_circuit(nodes: list[Any] | None = None, edges: list[Any] | None = None) -> Any:
+    payload = compact_dict(nodes=nodes, edges=edges)
+    return await get_conn(C).send("VALIDATE_CIRCUIT", payload)
+
 @mcp.tool(description=get_doc(circuit_docs, "circuit_get_schema", "Return PhysBox: Volt schema"))
 async def circuit_get_schema() -> Any:
     return get_reference_docs(circuit_docs)
@@ -525,6 +555,22 @@ async def circuit_get_schema() -> Any:
 @mcp.tool(description=get_doc(circuit_docs, "circuit_get_waveforms", "Return component waveforms"))
 async def circuit_get_waveforms() -> Any:
     return await get_conn(C).send("GET_WAVEFORMS")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_get_history", "Return simulation waveform history"))
+async def circuit_get_history() -> Any:
+    return await get_conn(C).send("GET_HISTORY")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_get_screenshot", "Capture current rendered frame of circuit canvas as a PNG image."))
+async def circuit_get_screenshot() -> Any:
+    result = await get_conn(C).send("SCREENSHOT")
+    if not isinstance(result, dict) or not result.get("ok"):
+        error = result.get("error") if isinstance(result, dict) else "Unknown error"
+        raise RuntimeError(f"Screenshot failed: {error}")
+    data_url = result.get("dataUrl", "")
+    if "," not in data_url:
+        raise ValueError("Invalid image data URL returned from simulator")
+    b64 = data_url.split(",", 1)[1]
+    return Image(data=base64.b64decode(b64), format="png")
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_upload_audio", "Upload audio samples to a microphone node."))
 async def circuit_upload_audio(
@@ -599,6 +645,18 @@ async def physics_list_presets() -> Any:
 @mcp.tool(description=get_doc(physics_docs, "physics_load_preset", "Load Mesh preset"))
 async def physics_load_preset(preset: str) -> Any:
     return await get_conn(Ph).send("LOAD_PRESET", {"preset": preset})
+
+@mcp.tool(description=get_doc(physics_docs, "physics_save_preset", "Save active physics scene as a user preset"))
+async def physics_save_preset(name: str) -> Any:
+    return await get_conn(Ph).send("SAVE_PRESET", {"preset": name})
+
+@mcp.tool(description=get_doc(physics_docs, "physics_delete_preset", "Delete a user physics preset"))
+async def physics_delete_preset(preset: str) -> Any:
+    return await get_conn(Ph).send("DELETE_PRESET", {"preset": preset})
+
+@mcp.tool(description=get_doc(physics_docs, "physics_check_collisions", "Check for initial axis-aligned bounding box overlaps/interpenetrations between scene bodies at t=0."))
+async def physics_check_collisions() -> Any:
+    return await get_conn(Ph).send("CHECK_COLLISIONS")
 
 @mcp.tool(description=get_doc(physics_docs, "physics_set_environment", "Set environment parameters"))
 async def physics_set_environment(

@@ -39,7 +39,7 @@ Secondary MCP Client (e.g. Antigravity)
 The full workspace is structured with the following sibling repositories:
 *   `~/physics` — PhysBox: Mesh rigid-body physics simulator app (MuJoCo WASM).
 *   `~/circuit` — PhysBox: Volt SPICE circuit simulator app (NgSpice WASM).
-*   `~/process` — PhysBox: Flux discrete-event / system-dynamics simulation app.
+*   `~/process` — PhysBox: Flux (Beta) discrete-event / system-dynamics simulation app.
 *   `~/physbox_mcp` — This repository (the companion MCP bridge).
 
 ### 2. Installing Dependencies
