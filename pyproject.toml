@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physbox-mcp"
-version = "0.4.0"
-description = "PhysBox: MCP - Model Context Protocol server for local simulation apps"
+version = "0.5.0"
+description = "PhysBox: MCP - Server for local simulation apps"
 readme = "README.md"
 authors = [
     {name = "Tom Grek", email = "tom.grek@gmail.com"}
