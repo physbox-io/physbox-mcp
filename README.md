@@ -4,11 +4,28 @@ PhysBox: MCP is a Model Context Protocol (MCP) server that enables LLMs and MCP 
 
 | Application | Production URL | Description |
 |---|---|---|
-| **Flux** (Beta) | [flux.physbox.io](https://flux.physbox.io) | Discrete-event / system-dynamics simulation (interactive React Flow graph) |
 | **Volt** | [volt.physbox.io](https://volt.physbox.io) | SPICE circuit simulation (powered by NgSpice WASM in browser) |
-| **Mesh** | [mesh.physbox.io](https://mesh.physbox.io) | Rigid-body physics simulation (powered by MuJoCo WASM in browser) |
+| **Mesh** | [mesh.physbox.io](https://mesh.physbox.io) | Rigid-body physics simulation & OpenSCAD parametric CAD (powered by MuJoCo WASM) |
+| **Etch** | [etch.physbox.io](https://etch.physbox.io) | 2D vector studio, CNC toolpathing & WebSerial GRBL controller |
+| **Flux** (Coming Soon) | [flux.physbox.io](https://flux.physbox.io) | Discrete-event / system-dynamics simulation |
 
 All communication is handled via JSON over WebSockets directly to the web app in your browser—no browser automation or DOM scraping is needed.
+
+### 🧠 The Only AI-Native Physical World Model
+Unlike static code generation or offline file outputs, PhysBox gives AI agents an **interactive ground-truth world model**. LLMs execute 53 typed tool calls to observe spatial kinematics, circuit node waveforms, and G-code safety warnings, allowing them to self-correct designs iteratively.
+
+---
+
+## 💬 Example Agent Prompts for Claude Code & Cursor
+
+Paste any of these prompts directly into your MCP-connected agent:
+
+* **Volt (Electronics):**
+  > *"Optimize the RC filter values in the active Volt schematic to achieve a 1 kHz cutoff frequency, then execute `circuit_run_sim` and plot the magnitude response."*
+* **Mesh (3D Physics & CAD):**
+  > *"Write an OpenSCAD parametric mounting bracket in Mesh with 4mm screw holes, run a MuJoCo collision stability check using `physics_check_collisions`, and export the Z-up STL."*
+* **Etch (CNC & Laser):**
+  > *"Import this vector SVG logo, apply 2-pass 3mm stepdown feeds for Plywood, check end mill safety warnings, and generate GRBL G-code."*
 
 ---
 

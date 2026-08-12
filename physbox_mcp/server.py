@@ -30,11 +30,13 @@ APPS = {
     "process": {"port": 5173, "name": "Flux"},
     "circuit": {"port": 5174, "name": "Volt"},
     "physics": {"port": 5175, "name": "Mesh"},
+    "etch":    {"port": 5176, "name": "Etch"},
 }
 
 P  = APPS["process"]["port"]
 C  = APPS["circuit"]["port"]
 Ph = APPS["physics"]["port"]
+Et = APPS["etch"]["port"]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -61,6 +63,7 @@ def load_mcp_docs(app_id: str) -> dict:
 physics_docs = load_mcp_docs("physics")
 process_docs = load_mcp_docs("process")
 circuit_docs = load_mcp_docs("circuit")
+etch_docs    = load_mcp_docs("etch")
 
 def get_reference_docs(docs: dict) -> dict:
     """Everything in an app's mcp-docs.json EXCEPT `tools` (each tool's text is
@@ -658,6 +661,25 @@ async def physics_delete_preset(preset: str) -> Any:
 async def physics_check_collisions() -> Any:
     return await get_conn(Ph).send("CHECK_COLLISIONS")
 
+@mcp.tool(description=get_doc(physics_docs, "physics_import_stl", "Import a binary or ASCII STL file into the 3D physics simulation as a parametric OpenSCAD node, raw mesh, or primitive."))
+async def physics_import_stl(
+    stlData: str,
+    name: str = "imported_stl",
+    importMode: str = "scad_parametric",
+    pos: list[float] | None = None,
+    scale: float | list[float] | None = None,
+    dynamic: bool = True
+) -> Any:
+    payload = compact_dict(
+        stlData=stlData,
+        name=name,
+        importMode=importMode,
+        pos=pos,
+        scale=scale,
+        dynamic=dynamic
+    )
+    return await get_conn(Ph).send("IMPORT_STL", payload, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_set_environment", "Set environment parameters"))
 async def physics_set_environment(
     gravityZ: float | None = None,
@@ -754,6 +776,44 @@ async def physics_get_note_cards() -> Any:
 @mcp.tool(description=get_doc(physics_docs, "physics_set_note_cards", "Replace note cards"))
 async def physics_set_note_cards(noteCards: list[Any]) -> Any:
     return await get_conn(Ph).send("SET_NOTE_CARDS", {"noteCards": noteCards})
+
+# ── PhysBox: Etch Tools ───────────────────────────────────────────────────────
+
+@mcp.tool(description=get_doc(etch_docs, "etch_get_state", "Return full PhysBox: Etch state"))
+async def etch_get_state() -> Any:
+    return await get_conn(Et).send("GET_STATE")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_set_document", "Replace document in PhysBox: Etch"))
+async def etch_set_document(document: dict) -> Any:
+    return await get_conn(Et).send("SET_DOCUMENT", {"document": document})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_set_svg", "Set/import raw SVG XML onto canvas"))
+async def etch_set_svg(svg: str) -> Any:
+    return await get_conn(Et).send("SET_SVG", {"svg": svg})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_export_svg", "Export active design as SVG XML string"))
+async def etch_export_svg() -> Any:
+    return await get_conn(Et).send("EXPORT_SVG")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_list_presets", "List built-in vector manufacturing presets"))
+async def etch_list_presets() -> Any:
+    return await get_conn(Et).send("LIST_PRESETS")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_load_preset", "Load vector preset by key"))
+async def etch_load_preset(preset: str) -> Any:
+    return await get_conn(Et).send("LOAD_PRESET", {"presetId": preset})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_add_element", "Add a new vector shape or element"))
+async def etch_add_element(element: dict) -> Any:
+    return await get_conn(Et).send("ADD_ELEMENT", {"element": element})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_generate_gcode", "Generate GRBL/Marlin G-code toolpath"))
+async def etch_generate_gcode(options: dict | None = None) -> Any:
+    return await get_conn(Et).send("GENERATE_GCODE", {"options": options or {}})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_get_schema", "Return PhysBox: Etch schema"))
+async def etch_get_schema() -> Any:
+    return get_reference_docs(etch_docs)
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 

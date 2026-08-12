@@ -1,0 +1,23 @@
+{
+  "overview": "PhysBox: Etch (etch.physbox.io) is a 2D vector CAD & manufacturing studio designed specifically for laser cutting, vector etching, and CNC milling/carving. It uses an SVG-native document model with interactive selection bounding boxes, multi-layered operations (Cut, Etch, Raster Fill), Google Fonts support, clip art symbol library, parametric mandala & radial symmetry tools, and direct G-code toolpath export & Web Serial GRBL streaming.",
+  "workflow": [
+    "1. Query the current document and elements using etch_get_state or etch_get_elements.",
+    "2. Send raw SVG vector code directly to the canvas using etch_set_svg or etch_import_svg.",
+    "3. Add or modify individual vector elements (rect, circle, ellipse, line, polygon, star, text, symbol, path) using etch_add_element or etch_update_element.",
+    "4. Load pre-designed vector manufacturing templates using etch_load_preset.",
+    "5. Export the active design to SVG using etch_export_svg or generate optimized GRBL/Marlin G-code using etch_generate_gcode."
+  ],
+  "tools": {
+    "etch_get_state": "Return full PhysBox: Etch state including document dimensions, layers, elements, selected IDs, and active tool.",
+    "etch_set_document": "Replace active document with a new EtchDocument schema.",
+    "etch_set_svg": "Import raw SVG XML string directly onto the canvas canvas, replacing or adding elements.",
+    "etch_export_svg": "Export the active canvas design as a clean, styled SVG XML string.",
+    "etch_list_presets": "List available built-in vector manufacturing presets (Keychains, Coasters, Box Joints, Gear, Signs, Badges).",
+    "etch_load_preset": "Load a specific built-in preset by key.",
+    "etch_get_elements": "Return array of vector elements on the active canvas.",
+    "etch_add_element": "Add a new vector shape, text, path, or symbol to the canvas.",
+    "etch_update_element": "Update properties (x, y, scale, rotation, strokeWidth, layerId) of a specific element by ID.",
+    "etch_delete_element": "Delete element(s) from the canvas by ID.",
+    "etch_generate_gcode": "Generate optimized GRBL/Marlin G-code for laser cutting or CNC milling with inner-first sorting and kerf offset."
+  }
+}
