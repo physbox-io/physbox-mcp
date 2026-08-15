@@ -1,0 +1,125 @@
+{
+  "overview": "PhysBox: Etch (etch.physbox.io) is a 2D vector CAD & manufacturing studio for laser cutting, vector etching, and CNC milling/carving. The document model is SVG-native and measured in millimetres: a document is a piece of stock (width x height, material, stockThickness) carrying layers (cut / etch / fill) and elements (rect, circle, ellipse, line, polygon, star, text, symbol, bezier, freehand, path). It supports Google Fonts text, a clip-art symbol library, parametric mandala & radial symmetry tools, and direct GRBL/Marlin G-code toolpath export with Web Serial streaming.",
+  "workflow": [
+    "1. Call etch_get_schema for the document/element/layer schema and preset list, then etch_get_state to see the document currently on the canvas.",
+    "2. Set up the job with etch_set_document (stock size, material, stockThickness, machine, layers) — fields you omit are kept from the current document.",
+    "3. Build geometry: etch_add_element for one shape at a time, or etch_set_svg to drop a whole SVG onto the canvas at once.",
+    "4. Or start from a template with etch_list_presets and etch_load_preset — note that loading a preset replaces the whole document.",
+    "5. Export with etch_export_svg (clean SVG XML) or etch_generate_gcode (GRBL/Marlin toolpath, inner-contour-first, kerf-compensated)."
+  ],
+  "gotchas": [
+    "MCP TOOLS ONLY WORK IN DEV: the bridge WebSocket lives in the Vite dev-server plugin, so Etch must be running on localhost:5176 (npm run dev). A production/static build has no bridge to connect to.",
+    "EVERYTHING IS MILLIMETRES, ORIGIN TOP-LEFT: x increases right, y increases down, from the top-left corner of the stock. The document's `origin` field ('top-left' | 'center' | 'bottom-left') controls where machine X0 Y0 sits for the G-code, not where the canvas draws.",
+    "ELEMENT x/y IS THE LOCAL ORIGIN, AND WHERE THAT SITS DEPENDS ON THE TYPE: circle and ellipse are drawn about it (x/y is the centre); rect is drawn from it (x/y is the top-left corner); line starts there and ends at x2/y2 relative to it; text hangs down from it; polygon/star/path/symbol are drawn from it in their own local coordinates. Rotation always pivots about the element's own bounding-box centre.",
+    "PARTIAL DOCUMENTS ARE MERGED, PRESETS ARE NOT: etch_set_document merges the fields you send onto the current document, so sending only {width, height} resizes the stock and keeps the drawing. etch_load_preset replaces the document outright — anything unsaved on the canvas is gone.",
+    "ELEMENTS NEED A LAYER THAT EXISTS: layerId defaults to 'cut'. If you sent a document whose layers do not include that id, the element will not be machined. The stock two layers are 'cut' (through-cut contours) and 'etch' (surface engraving).",
+    "SIZE FIELDS ARE PER TYPE: rect uses w/h (rx/ry for corner radius), circle uses r, ellipse uses rx2/ry2, line uses x2/y2, polygon uses points, text uses text/fontSize/fontFamily, path/bezier/freehand use d or bezierNodes. Sending w/h on a circle does nothing.",
+    "STAR, PATH AND SYMBOL ARE DRAWN FROM `d`: etch_add_element stores what you send verbatim, so an element of those types with no `d` renders and machines as nothing. Send explicit SVG path data, or use rect/circle/ellipse/line/polygon, which are generated from their own fields.",
+    "MACHINE KIND DECIDES WHETHER Z EXISTS: document.machine 'laser' modulates power at a fixed height and ignores per-layer zDepth; 'cnc' cuts in passes to zDepth. Set material and stockThickness — feeds, spindle speed and depth-per-pass are all derived from them, and 'cut through' is meaningless without a thickness.",
+    "KERF IS NOT OPTIONAL: contour offset is applied by default so parts come out to size; opt out per element with cutSide 'on' rather than by disabling it globally.",
+    "TEXT IS OUTLINED BEFORE IT IS CUT: a text element machines from its generated outline, which is regenerated when the text or font changes. A font that has not loaded yet can briefly outline differently from what the canvas shows."
+  ],
+  "coordinateSystem": "Millimetres, origin at the top-left of the stock, x right and y down. An element's geometry is drawn in its own local coordinates and then translated by x/y, scaled by scaleX/scaleY and rotated by `rotation` degrees clockwise about its bounding-box centre — so x/y is the centre of a circle but the top-left corner of a rect. Default stock is 300 x 200 mm.",
+  "tools": {
+    "etch_get_state": "Return the full PhysBox: Etch state — document (dimensions, material, machine, layers, elements), selectedIds, activeTool and elementCount.",
+    "etch_set_document": "Merge an EtchDocument (or any subset of its fields) onto the active document. Use for stock size, material, stockThickness, machine, gridSize, origin, layers, or to replace the whole elements array. Omitted fields are kept.",
+    "etch_set_svg": "Import a raw SVG XML string onto the canvas, replacing the current elements and adding any layers the SVG implies. Returns importedCount and per-shape warnings.",
+    "etch_export_svg": "Export the active design as a clean, styled SVG XML string.",
+    "etch_list_presets": "List the built-in vector manufacturing presets (id, name, category, description).",
+    "etch_load_preset": "Load a built-in preset by id, replacing the entire active document. Ids: blank, hotel-keychain, mandala-coaster, intricate-mandala-art, box-joint-panel, spur-gear-set, wooden-desk-sign, cyberpunk-badge.",
+    "etch_add_element": "Add one vector shape, text, path or symbol to the canvas. Only `type` is really needed; x/y default to the centre of the stock, layerId to 'cut', and stroke/fill to the cut-layer defaults. Returns the new element's id.",
+    "etch_generate_gcode": "Generate a GRBL/Marlin G-code toolpath for the active document — inner contours first, kerf-compensated, using the tool rack and machine settings currently loaded in the app. Options may override laserMode, spindleSpeedMax, travelSpeed and innerContourFirst.",
+    "etch_get_schema": "Return this reference: the document/element/layer schema, coordinate system, workflow and gotchas."
+  },
+  "schema": {
+    "document": {
+      "id": "string",
+      "name": "string",
+      "width": "number (mm, stock width)",
+      "height": "number (mm, stock height)",
+      "gridSize": "number (mm, e.g. 10)",
+      "units": "'mm'",
+      "origin": "where machine X0 Y0 sits relative to the stock, e.g. 'top-left'",
+      "machine": "'laser' | 'cnc'",
+      "material": "'mdf' | 'plywood' | 'softwood' | 'hardwood' | 'acrylic' | 'aluminium' | 'glass' | 'stone' | 'ceramic'",
+      "stockThickness": "number (mm)",
+      "thickTabs": "boolean — leave more material at each holding tab",
+      "defaultHatchAngle": "number (degrees), applied when an element is switched to filled machining",
+      "defaultHatchSpacing": "number (mm)",
+      "layers": "EtchLayer[]",
+      "elements": "EtchElement[]",
+      "selectedIds": "string[]",
+      "notecard": "markdown string shown alongside the document"
+    },
+    "layer": {
+      "id": "string (elements reference this via layerId)",
+      "name": "string",
+      "color": "hex string",
+      "operation": "'cut' | 'etch' | 'fill'",
+      "visible": "boolean",
+      "locked": "boolean",
+      "speed": "number (mm/min) — laser fallback when the material profile does not decide it",
+      "power": "number (0-100) — laser fallback",
+      "passes": "number",
+      "zDepth": "number (mm) — CNC only; ignored on a laser"
+    },
+    "elementTypes": ["rect", "circle", "ellipse", "line", "polygon", "star", "text", "symbol", "bezier", "freehand", "path"],
+    "elementCommonFields": {
+      "id": "string",
+      "name": "string",
+      "type": "ElementType",
+      "layerId": "string (default 'cut')",
+      "x": "number (mm, centre)",
+      "y": "number (mm, centre)",
+      "rotation": "number (degrees)",
+      "scaleX": "number",
+      "scaleY": "number",
+      "opacity": "number 0-1",
+      "strokeColor": "hex string",
+      "strokeWidth": "number (mm)",
+      "strokeDash": "'solid' | 'dashed' | 'dotted'",
+      "fillColor": "'none' or hex/rgba",
+      "visible": "boolean",
+      "locked": "boolean",
+      "machining": "'outline' | 'filled' — filled additionally hatches the interior",
+      "hatchAngle": "number (degrees)",
+      "hatchSpacing": "number (mm)",
+      "hatchOutline": "boolean — whether a filled element also cuts its outline"
+    },
+    "elementTypeFields": {
+      "rect": "w, h, rx, ry",
+      "circle": "r",
+      "ellipse": "rx2, ry2",
+      "line": "x2, y2",
+      "polygon": "points (array of {x, y} in local mm); sides records how many the app generated",
+      "star": "d (SVG path data); pointsCount, innerRadius, outerRadius describe the path the app generated",
+      "text": "text, fontFamily, fontSize, fontWeight, letterSpacing, textPathId, textPathOffset, textPathAlign, textPathSide",
+      "symbol": "symbolId",
+      "bezier / freehand / path": "bezierNodes (x, y, handleIn, handleOut) or d (SVG path data)"
+    },
+    "gcodeOptions": {
+      "laserMode": "boolean — true for GRBL laser M3/M5, false for CNC Z-axis passes",
+      "spindleSpeedMax": "number — maximum S value (e.g. 1000 on GRBL)",
+      "travelSpeed": "number (mm/min) for rapids",
+      "innerContourFirst": "boolean — cut internal holes before outer boundaries"
+    }
+  },
+  "examples": {
+    "resizeStockKeepingTheDrawing": {
+      "tool": "etch_set_document",
+      "args": {"document": {"width": 120, "height": 120, "material": "plywood", "stockThickness": 3, "machine": "laser"}}
+    },
+    "addACutCircle": {
+      "tool": "etch_add_element",
+      "args": {"element": {"type": "circle", "name": "Mount Hole", "layerId": "cut", "x": 60, "y": 60, "r": 4}}
+    },
+    "addEngravedText": {
+      "tool": "etch_add_element",
+      "args": {"element": {"type": "text", "layerId": "etch", "x": 60, "y": 100, "text": "PHYSBOX", "fontSize": 12, "fontFamily": "Inter", "machining": "filled"}}
+    },
+    "exportALaserToolpath": {
+      "tool": "etch_generate_gcode",
+      "args": {"options": {"laserMode": true, "travelSpeed": 3000, "innerContourFirst": true}}
+    }
+  }
+}

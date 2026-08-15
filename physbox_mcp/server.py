@@ -364,7 +364,8 @@ threading.Thread(target=start_ws_bridge, daemon=True).start()
 mcp = FastMCP(
     "physbox-mcp",
     instructions=(
-        "PhysBox: MCP - Model Context Protocol server for Volt (5174), Mesh (5175), and Flux (Beta) (5173). "
+        "PhysBox: MCP - Model Context Protocol server for Volt (5174), Mesh (5175), "
+        "Etch (5176), and Flux (Beta) (5173). "
         "Call detect_apps first to confirm which apps are running."
     ),
 )
