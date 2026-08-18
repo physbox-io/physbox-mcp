@@ -1,6 +1,6 @@
 # PhysBox: MCP
 
-PhysBox: MCP is a Model Context Protocol (MCP) server that enables LLMs and MCP clients (such as Claude Code or Claude Desktop) to interact programmatically with the three simulation web applications in the browser:
+PhysBox: MCP is a Model Context Protocol (MCP) server that enables LLMs and MCP clients (such as Claude Code or Claude Desktop) to interact programmatically with the four simulation web applications in the browser:
 
 | Application | Production URL | Description |
 |---|---|---|
@@ -12,7 +12,7 @@ PhysBox: MCP is a Model Context Protocol (MCP) server that enables LLMs and MCP 
 All communication is handled via JSON over WebSockets directly to the web app in your browser—no browser automation or DOM scraping is needed.
 
 ### 🧠 The Only AI-Native Physical World Model
-Unlike static code generation or offline file outputs, PhysBox gives AI agents an **interactive ground-truth world model**. LLMs execute 53 typed tool calls to observe spatial kinematics, circuit node waveforms, and G-code safety warnings, allowing them to self-correct designs iteratively.
+Unlike static code generation or offline file outputs, PhysBox gives AI agents an **interactive ground-truth world model**. LLMs execute 81 typed tool calls to observe spatial kinematics, circuit node waveforms, and G-code safety warnings, allowing them to self-correct designs iteratively.
 
 ---
 
@@ -41,7 +41,8 @@ MCP Client (e.g. Claude Desktop)
                  └── WebSocket Server (ws://localhost:3142)
                                 ├── Flux
                                 ├── Volt
-                                └── Mesh
+                                ├── Mesh
+                                └── Etch
 ```
 
 ---
@@ -63,6 +64,7 @@ Launch or access the simulation web applications in your web browser:
 *   **Flux:** [flux.physbox.io](https://flux.physbox.io)
 *   **Volt:** [volt.physbox.io](https://volt.physbox.io)
 *   **Mesh:** [mesh.physbox.io](https://mesh.physbox.io)
+*   **Etch:** [etch.physbox.io](https://etch.physbox.io)
 
 As soon as a page finishes loading, it automatically registers with the companion WebSocket server.
 

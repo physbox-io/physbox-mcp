@@ -1,5 +1,5 @@
 """
-PhysBox: MCP - Model Context Protocol Server for Flux, Volt, and Mesh.
+PhysBox: MCP - Model Context Protocol Server for Flux, Volt, Mesh, and Etch.
 Connects LLMs to browser-based simulations via WebSocket relay.
 """
 
@@ -807,6 +807,40 @@ async def etch_load_preset(preset: str) -> Any:
 @mcp.tool(description=get_doc(etch_docs, "etch_add_element", "Add a new vector shape or element"))
 async def etch_add_element(element: dict) -> Any:
     return await get_conn(Et).send("ADD_ELEMENT", {"element": element})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_list_clipart", "List the built-in vector clip-art symbols"))
+async def etch_list_clipart() -> Any:
+    return await get_conn(Et).send("LIST_CLIPART")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_add_clipart", "Place a clip-art symbol on the canvas by id"))
+async def etch_add_clipart(
+    symbolId: str,
+    x: float | None = None,
+    y: float | None = None,
+    size: float | None = None,
+    rotation: float | None = None,
+    layerId: str | None = None,
+) -> Any:
+    return await get_conn(Et).send("ADD_CLIPART", compact_dict(
+        symbolId=symbolId, x=x, y=y, size=size, rotation=rotation, layerId=layerId
+    ))
+
+@mcp.tool(description=get_doc(etch_docs, "etch_add_image", "Import a raster image as vector, halftone, scanline or shade"))
+async def etch_add_image(
+    image: str,
+    options: dict | None = None,
+    layerId: str | None = None,
+) -> Any:
+    # Longer than the default 10s: the bytes have to cross the bridge and the
+    # tracer runs on the browser's main thread, and a timeout here would leave
+    # the import half-done rather than not done.
+    return await get_conn(Et).send("ADD_IMAGE", compact_dict(
+        image=image, options=options, layerId=layerId
+    ), timeout=60.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_list_capabilities", "List tools, materials, image modes and layer operations available"))
+async def etch_list_capabilities() -> Any:
+    return await get_conn(Et).send("LIST_CAPABILITIES")
 
 @mcp.tool(description=get_doc(etch_docs, "etch_generate_gcode", "Generate GRBL/Marlin G-code toolpath"))
 async def etch_generate_gcode(options: dict | None = None) -> Any:

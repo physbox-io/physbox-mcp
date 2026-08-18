@@ -1,11 +1,12 @@
 {
-  "overview": "PhysBox: Etch (etch.physbox.io) is a 2D vector CAD & manufacturing studio for laser cutting, vector etching, and CNC milling/carving. The document model is SVG-native and measured in millimetres: a document is a piece of stock (width x height, material, stockThickness) carrying layers (cut / etch / fill) and elements (rect, circle, ellipse, line, polygon, star, text, symbol, bezier, freehand, path). It supports Google Fonts text, a clip-art symbol library, parametric mandala & radial symmetry tools, and direct GRBL/Marlin G-code toolpath export with Web Serial streaming.",
+  "overview": "PhysBox: Etch (etch.physbox.io) is a 2D vector CAD & manufacturing studio for laser cutting, vector etching, and CNC milling/carving. The document model is SVG-native and measured in millimetres: a document is a piece of stock (width x height, material, stockThickness) carrying layers (cut / etch / fill / shade) and elements (rect, circle, ellipse, line, polygon, star, text, symbol, bezier, freehand, path, image). It supports Google Fonts text, a clip-art symbol library, parametric mandala & radial symmetry tools, raster image import in four modes (traced vector, halftone, scanline, greyscale shade), and direct GRBL/Marlin G-code toolpath export with Web Serial streaming.",
   "workflow": [
     "1. Call etch_get_schema for the document/element/layer schema and preset list, then etch_get_state to see the document currently on the canvas.",
-    "2. Set up the job with etch_set_document (stock size, material, stockThickness, machine, layers) — fields you omit are kept from the current document.",
-    "3. Build geometry: etch_add_element for one shape at a time, or etch_set_svg to drop a whole SVG onto the canvas at once.",
-    "4. Or start from a template with etch_list_presets and etch_load_preset — note that loading a preset replaces the whole document.",
-    "5. Export with etch_export_svg (clean SVG XML) or etch_generate_gcode (GRBL/Marlin toolpath, inner-contour-first, kerf-compensated)."
+    "2. Call etch_list_capabilities for what this machine actually has — its tool rack, the material list, the layer operations and the image modes. The rack is user-editable, so advising a tool from memory advises fitting one they may not own.",
+    "3. Set up the job with etch_set_document (stock size, material, stockThickness, machine, layers) — fields you omit are kept from the current document.",
+    "4. Build geometry: etch_add_element for one shape at a time, etch_set_svg to drop a whole SVG onto the canvas at once, etch_add_clipart to place a library symbol (etch_list_clipart names them), or etch_add_image to bring in a raster picture.",
+    "5. Or start from a template with etch_list_presets and etch_load_preset — note that loading a preset replaces the whole document.",
+    "6. Export with etch_export_svg (clean SVG XML) or etch_generate_gcode (GRBL/Marlin toolpath, inner-contour-first, kerf-compensated)."
   ],
   "gotchas": [
     "MCP TOOLS ONLY WORK IN DEV: the bridge WebSocket lives in the Vite dev-server plugin, so Etch must be running on localhost:5176 (npm run dev). A production/static build has no bridge to connect to.",
@@ -14,10 +15,14 @@
     "PARTIAL DOCUMENTS ARE MERGED, PRESETS ARE NOT: etch_set_document merges the fields you send onto the current document, so sending only {width, height} resizes the stock and keeps the drawing. etch_load_preset replaces the document outright — anything unsaved on the canvas is gone.",
     "ELEMENTS NEED A LAYER THAT EXISTS: layerId defaults to 'cut'. If you sent a document whose layers do not include that id, the element will not be machined. The stock two layers are 'cut' (through-cut contours) and 'etch' (surface engraving).",
     "SIZE FIELDS ARE PER TYPE: rect uses w/h (rx/ry for corner radius), circle uses r, ellipse uses rx2/ry2, line uses x2/y2, polygon uses points, text uses text/fontSize/fontFamily, path/bezier/freehand use d or bezierNodes. Sending w/h on a circle does nothing.",
-    "STAR, PATH AND SYMBOL ARE DRAWN FROM `d`: etch_add_element stores what you send verbatim, so an element of those types with no `d` renders and machines as nothing. Send explicit SVG path data, or use rect/circle/ellipse/line/polygon, which are generated from their own fields.",
+    "STAR AND PATH ARE DRAWN FROM `d`: etch_add_element stores what you send verbatim, so an element of those types with no `d` renders and machines as nothing. Send explicit SVG path data, or use rect/circle/ellipse/line/polygon, which are generated from their own fields. A `symbol` is the exception: send a symbolId from etch_list_clipart and the path data is filled in from the library.",
     "MACHINE KIND DECIDES WHETHER Z EXISTS: document.machine 'laser' modulates power at a fixed height and ignores per-layer zDepth; 'cnc' cuts in passes to zDepth. Set material and stockThickness — feeds, spindle speed and depth-per-pass are all derived from them, and 'cut through' is meaningless without a thickness.",
     "KERF IS NOT OPTIONAL: contour offset is applied by default so parts come out to size; opt out per element with cutSide 'on' rather than by disabling it globally.",
-    "TEXT IS OUTLINED BEFORE IT IS CUT: a text element machines from its generated outline, which is regenerated when the text or font changes. A font that has not loaded yet can briefly outline differently from what the canvas shows."
+    "TEXT IS OUTLINED BEFORE IT IS CUT: a text element machines from its generated outline, which is regenerated when the text or font changes. A font that has not loaded yet can briefly outline differently from what the canvas shows.",
+    "AN IMAGE IS TONE, NOT A SHAPE: etch_add_image has four modes. 'vector' traces an outline, 'halftone' makes a dot grid and 'scanline' makes engrave lines — all three decide at import that a pixel is either cut or not, and land as one compound path element. 'shade' does not: it puts the greyscale pixels in the document as an `image` element and lets darkness vary along the move, so pitch, angle, depth and size stay editable afterwards. Shading needs a layer whose operation is 'shade' — the import makes one if the document has none, and the planner skips an image on any other kind of layer.",
+    "ONLY IMAGE BYTES, NOT URLS: etch_add_image takes base64 (or a data: URL). A remote URL drawn into a canvas taints it and the pixels become unreadable, so an http source cannot work.",
+    "CLIP ART IS PLACED BY ID: etch_add_clipart (or etch_add_element with type 'symbol' and a symbolId) fills in the path data and the viewBox scale for you. The library mixes a legacy 24-unit grid with a newer 100-unit one, so a symbol assembled by hand with a fixed scale comes out four times the size of its neighbours.",
+    "TEXT IS OUTLINED FOR YOU: add a `text` element with text/fontSize/fontFamily and the app vectorizes it — any Google Font. Do not send letterforms as path data."
   ],
   "coordinateSystem": "Millimetres, origin at the top-left of the stock, x right and y down. An element's geometry is drawn in its own local coordinates and then translated by x/y, scaled by scaleX/scaleY and rotated by `rotation` degrees clockwise about its bounding-box centre — so x/y is the centre of a circle but the top-left corner of a rect. Default stock is 300 x 200 mm.",
   "tools": {
@@ -27,9 +32,13 @@
     "etch_export_svg": "Export the active design as a clean, styled SVG XML string.",
     "etch_list_presets": "List the built-in vector manufacturing presets (id, name, category, description).",
     "etch_load_preset": "Load a built-in preset by id, replacing the entire active document. Ids: blank, hotel-keychain, mandala-coaster, intricate-mandala-art, box-joint-panel, spur-gear-set, wooden-desk-sign, cyberpunk-badge.",
-    "etch_add_element": "Add one vector shape, text, path or symbol to the canvas. Only `type` is really needed; x/y default to the centre of the stock, layerId to 'cut', and stroke/fill to the cut-layer defaults. Returns the new element's id.",
+    "etch_add_element": "Add one vector shape, text, path, symbol or image to the canvas. Only `type` is really needed; x/y default to the centre of the stock, layerId to 'cut', and stroke/fill to the cut-layer defaults. A `symbol` sent with a symbolId and no `d` is resolved from the clip-art library. Returns the new element's id.",
     "etch_generate_gcode": "Generate a GRBL/Marlin G-code toolpath for the active document — inner contours first, kerf-compensated, using the tool rack and machine settings currently loaded in the app. Options may override laserMode, spindleSpeedMax, travelSpeed and innerContourFirst.",
-    "etch_get_schema": "Return this reference: the document/element/layer schema, coordinate system, workflow and gotchas."
+    "etch_get_schema": "Return this reference: the document/element/layer schema, coordinate system, workflow and gotchas.",
+    "etch_list_clipart": "List the built-in vector clip-art symbols (id, name, category). They are line art designed to be machined, so prefer one over generating your own version of the same subject.",
+    "etch_add_clipart": "Place a clip-art symbol by id. Path data and the per-symbol viewBox scale are filled in for you; x/y default to centred on the stock and `size` to a bounding size that fits it. Returns the new element's id and the size used.",
+    "etch_add_image": "Import a raster image (base64 or data: URL) in one of four modes: 'vector' (marching-squares outline trace), 'halftone' (dot grid), 'scanline' (engraved lines) or 'shade' (greyscale tone). `options` accepts mode, threshold, contrast, invert, blur, targetWidth, targetHeight, halftoneSpacing, scanlineSpacing, shadePitch and simplifyTolerance; sizes default to an aspect-preserving fit on the stock. A shade import lands on a shade layer, creating one if the document has none. Returns the new element's id, the layer it landed on, and any shade layer created.",
+    "etch_list_capabilities": "List what this machine and build actually offer: the loaded tool rack (empty on a laser — that is how 'no tools to change' is expressed), the material catalogue, the layer operations, the four image modes, and the drawing tools in the UI."
   },
   "schema": {
     "document": {
@@ -55,7 +64,7 @@
       "id": "string (elements reference this via layerId)",
       "name": "string",
       "color": "hex string",
-      "operation": "'cut' | 'etch' | 'fill'",
+      "operation": "'cut' | 'etch' | 'fill' | 'shade' — shade machines an image as varying tone and takes only `image` elements",
       "visible": "boolean",
       "locked": "boolean",
       "speed": "number (mm/min) — laser fallback when the material profile does not decide it",
@@ -63,7 +72,20 @@
       "passes": "number",
       "zDepth": "number (mm) — CNC only; ignored on a laser"
     },
-    "elementTypes": ["rect", "circle", "ellipse", "line", "polygon", "star", "text", "symbol", "bezier", "freehand", "path"],
+    "elementTypes": [
+      "rect",
+      "circle",
+      "ellipse",
+      "line",
+      "polygon",
+      "star",
+      "text",
+      "symbol",
+      "bezier",
+      "freehand",
+      "path",
+      "image"
+    ],
     "elementCommonFields": {
       "id": "string",
       "name": "string",
@@ -94,32 +116,80 @@
       "polygon": "points (array of {x, y} in local mm); sides records how many the app generated",
       "star": "d (SVG path data); pointsCount, innerRadius, outerRadius describe the path the app generated",
       "text": "text, fontFamily, fontSize, fontWeight, letterSpacing, textPathId, textPathOffset, textPathAlign, textPathSide",
-      "symbol": "symbolId",
-      "bezier / freehand / path": "bezierNodes (x, y, handleIn, handleOut) or d (SVG path data)"
+      "symbol": "symbolId (from etch_list_clipart); d and scaleX/scaleY are filled in from the library when omitted",
+      "bezier / freehand / path": "bezierNodes (x, y, handleIn, handleOut) or d (SVG path data)",
+      "image": "imageGray (base64 greyscale samples, one byte per pixel, row-major, 0 black), imgW/imgH (the sample grid), w/h (size on the material in mm), hatchSpacing (tone line pitch in mm), hatchAngle. Produced by etch_add_image in 'shade' mode — not something to hand-assemble."
     },
     "gcodeOptions": {
       "laserMode": "boolean — true for GRBL laser M3/M5, false for CNC Z-axis passes",
       "spindleSpeedMax": "number — maximum S value (e.g. 1000 on GRBL)",
       "travelSpeed": "number (mm/min) for rapids",
       "innerContourFirst": "boolean — cut internal holes before outer boundaries"
+    },
+    "imageOptions": {
+      "mode": "'vector' | 'halftone' | 'scanline' | 'shade'",
+      "threshold": "0-255 — what counts as dark. The first knob to turn when a trace comes back empty.",
+      "contrast": "number, applied before thresholding",
+      "invert": "boolean — for light artwork on a dark background",
+      "blur": "number — smooths speckle before tracing",
+      "targetWidth": "number (mm on the material); targetHeight is derived from the aspect ratio when omitted",
+      "targetHeight": "number (mm on the material)",
+      "halftoneSpacing": "number (mm between dots, halftone mode)",
+      "scanlineSpacing": "number (mm between lines, scanline mode)",
+      "shadePitch": "number (mm between tone sweeps, shade mode) — a finer pitch costs proportionally more machining time",
+      "simplifyTolerance": "number (mm) — Douglas-Peucker tolerance on traced outlines"
     }
   },
   "examples": {
     "resizeStockKeepingTheDrawing": {
       "tool": "etch_set_document",
-      "args": {"document": {"width": 120, "height": 120, "material": "plywood", "stockThickness": 3, "machine": "laser"}}
+      "args": {
+        "document": {
+          "width": 120,
+          "height": 120,
+          "material": "plywood",
+          "stockThickness": 3,
+          "machine": "laser"
+        }
+      }
     },
     "addACutCircle": {
       "tool": "etch_add_element",
-      "args": {"element": {"type": "circle", "name": "Mount Hole", "layerId": "cut", "x": 60, "y": 60, "r": 4}}
+      "args": {
+        "element": {
+          "type": "circle",
+          "name": "Mount Hole",
+          "layerId": "cut",
+          "x": 60,
+          "y": 60,
+          "r": 4
+        }
+      }
     },
     "addEngravedText": {
       "tool": "etch_add_element",
-      "args": {"element": {"type": "text", "layerId": "etch", "x": 60, "y": 100, "text": "PHYSBOX", "fontSize": 12, "fontFamily": "Inter", "machining": "filled"}}
+      "args": {
+        "element": {
+          "type": "text",
+          "layerId": "etch",
+          "x": 60,
+          "y": 100,
+          "text": "PHYSBOX",
+          "fontSize": 12,
+          "fontFamily": "Inter",
+          "machining": "filled"
+        }
+      }
     },
     "exportALaserToolpath": {
       "tool": "etch_generate_gcode",
-      "args": {"options": {"laserMode": true, "travelSpeed": 3000, "innerContourFirst": true}}
+      "args": {
+        "options": {
+          "laserMode": true,
+          "travelSpeed": 3000,
+          "innerContourFirst": true
+        }
+      }
     }
   }
 }
