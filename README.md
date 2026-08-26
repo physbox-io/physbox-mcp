@@ -164,3 +164,13 @@ physbox-mcp --port=4000
 
 ## Development & Contribution
 For instructions on local development, modifying schemas, extending tool definitions, and manual builds, please refer to [README_DEV.md](README_DEV.md).
+
+---
+
+## 📜 License
+Distributed under the **PhysBox Permissive Public License (PPPL-1.0)**.
+
+Free for personal, educational, research, and commercial use, including commercial
+sale of anything you produce with it. Redistributing or hosting the software itself
+as a standalone or competing product requires prior written authorization. See
+[LICENSE](LICENSE) for full terms, including the machinery and hardware safety disclaimer.
