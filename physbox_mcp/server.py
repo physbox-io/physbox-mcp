@@ -770,6 +770,30 @@ async def physics_get_object(id: str) -> Any:
 async def physics_update_object(id: str, updates: dict) -> Any:
     return await get_conn(Ph).send("UPDATE_OBJECT", {"targetId": id, "updates": updates}, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_set_color", "Set a body's base colour"))
+async def physics_set_color(id: str, rgba: list[float], geomName: str | None = None) -> Any:
+    return await get_conn(Ph).send("SET_COLOR", {"targetId": id, "rgba": rgba, "geomName": geomName}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_paint", "Brush colour onto part of a geom's surface"))
+async def physics_paint(
+    id: str,
+    at: list[Any],
+    rgba: list[float],
+    radius: float = 0.008,
+    geomName: str | None = None,
+    flow: float = 1.0,
+    erase: bool = False,
+) -> Any:
+    return await get_conn(Ph).send(
+        "PAINT",
+        {"targetId": id, "at": at, "rgba": rgba, "radius": radius, "geomName": geomName, "flow": flow, "erase": erase},
+        timeout=60.0,
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_clear_paint", "Remove brushed paint"))
+async def physics_clear_paint(id: str | None = None, geomName: str | None = None) -> Any:
+    return await get_conn(Ph).send("CLEAR_PAINT", {"targetId": id, "geomName": geomName})
+
 @mcp.tool(description=get_doc(physics_docs, "physics_get_note_cards", "Return note cards"))
 async def physics_get_note_cards() -> Any:
     return await get_conn(Ph).send("GET_NOTE_CARDS")
@@ -837,6 +861,36 @@ async def etch_add_image(
     return await get_conn(Et).send("ADD_IMAGE", compact_dict(
         image=image, options=options, layerId=layerId
     ), timeout=60.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_combine", "Union, subtract, intersect or exclude two or more shapes into one path"))
+async def etch_combine(elementIds: list[str], op: str) -> Any:
+    # Order is the operation, not a detail: elementIds[0] is the base, and for
+    # 'subtract' it is the shape being cut into. Passed through as sent.
+    return await get_conn(Et).send("COMBINE", {"elementIds": elementIds, "op": op})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_make_test_grid", "Generate a material test grid, replacing the open document"))
+async def etch_make_test_grid(options: dict | None = None) -> Any:
+    # Longer than the default: the grid's labels are vectorized before the reply
+    # comes back, and a font that has to be fetched makes that a slow call.
+    return await get_conn(Et).send("MAKE_TEST_GRID", {"options": options or {}}, timeout=60.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_status", "Report the connected machine's state, position and live trim"))
+async def etch_machine_status() -> Any:
+    return await get_conn(Et).send("MACHINE_STATUS")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_trim", "Trim feed, power or rapid speed on the running machine"))
+async def etch_machine_trim(
+    feed: Any | None = None,
+    power: Any | None = None,
+    rapid: int | None = None,
+) -> Any:
+    # Steps, not targets: GRBL has no "set the feed to 87%" command, and the
+    # browser end rejects anything else rather than accepting it and doing
+    # nothing. There is no start, resume or jog here on purpose — a machine
+    # begins moving when the person beside it says so, not when an agent does.
+    return await get_conn(Et).send("MACHINE_TRIM", compact_dict(
+        feed=feed, power=power, rapid=rapid
+    ))
 
 @mcp.tool(description=get_doc(etch_docs, "etch_list_capabilities", "List tools, materials, image modes and layer operations available"))
 async def etch_list_capabilities() -> Any:

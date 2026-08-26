@@ -71,7 +71,10 @@
     "physics_get_object": "Return a single object by ID from the physics scene graph with large mesh arrays stripped.",
     "physics_update_object": "Update a single object by ID in the physics scene graph. The updates parameter is a partial object containing any fields from nodeFields (such as scad, pos, euler, script, joints, or geoms) to update and recompile on-the-fly.",
     "physics_get_note_cards": "Return the current array of note card overlays. Each card has { id, markdown, minimized, x, y }.",
-    "physics_set_note_cards": "Replace the note card overlays. Pass noteCards: [{ id, markdown, minimized, x, y }]. Use to add explanatory notes, update existing cards, or clear all cards (pass an empty array)."
+    "physics_set_note_cards": "Replace the note card overlays. Pass noteCards: [{ id, markdown, minimized, x, y }]. Use to add explanatory notes, update existing cards, or clear all cards (pass an empty array).",
+    "physics_set_color": "Set a body's base colour. rgba is [r,g,b] or [r,g,b,a], each 0..1; alpha below 1 renders translucent. Omit geomName to colour every geom of the body, which is usually what you want after physics_import_stl \u2014 an imported mesh often arrives as several geoms and colouring one leaves the rest as they were. Colour is decorative only: it never reaches the physics, the MJCF or any exporter, so this is always safe to call. For markings on part of a surface \u2014 pips, stripes, a logo, eyes on a face \u2014 use physics_paint instead of adding decorative geoms.",
+    "physics_paint": "Brush colour onto PART of a geom's surface, as dabs at points on it. This is the right tool for markings \u2014 the pips of a die, a stripe down a roller, eyes on a head \u2014 and it replaces the old trick of parenting tiny decorative geoms to a body: paint adds no geoms, no collisions and no mass. at is [x,y,z] or a list of them, in the GEOM'S OWN frame in metres (the same frame as the geom's pos/size \u2014 so a box of size [0.01,0.01,0.01] has its +Z face at z=0.01 and its corners at x,y=\u00b10.01), and every point in one call is one stroke: the five pips of a die face are a single call. radius is the brush radius in metres (default 0.008). rgba is [r,g,b], each 0..1. flow is how much coverage one dab lays down, 0..1 (default 1 \u2014 full strength; lower values tint, and dabs that overlap build up). Pass erase:true to take paint off instead. Paintable geom types are box, sphere, ellipsoid, cylinder, capsule and mesh; a mesh is painted on the vertices it already has, so a coarse mesh holds only coarse marks. Painted geoms are re-tessellated finely, which is visual only. Errors if no vertex falls within radius of any point \u2014 that means the point is not on the surface, usually because it was given in world space instead of the geom's frame.",
+    "physics_clear_paint": "Remove brushed paint. With no id, strips every stroke in the scene; with an id, that body; with an id and a geomName, that geom. Base colours set by physics_set_color are left alone."
   },
   "schema": {
     "geomTypes": [
@@ -119,7 +122,8 @@
       "dynamic": "boolean \u2014 if true, mesh participates fully in simulation and collision (convex hull). Requires renderVertices.",
       "renderVertices": "number[] \u2014 dynamic mesh only: flat [x0,y0,z0,...] in raw MuJoCo Z-up space. Convert from Y-up: (x,y,z)\u2192(x,-z,y). Do NOT subtract centroid \u2014 MuJoCo recenters internally and xpos tracks the result.",
       "margin": "number \u2014 expand contact surface outward by this amount (meters). Useful to prevent sinking.",
-      "gap": "number \u2014 dead zone inside margin where no contact force is applied."
+      "gap": "number \u2014 dead zone inside margin where no contact force is applied.",
+      "paint": "{res, idx, rgba} \u2014 brushed vertex colour laid down by physics_paint, stored sparsely and quantised to bytes. Read-only in practice: write it with physics_paint rather than by hand, and note that physics_get_scene returns it verbatim, so it round-trips through physics_update_scene and the app's JSON save/load. Decorative only."
     },
     "nodeFields": {
       "id": "string \u2014 unique body identifier",
