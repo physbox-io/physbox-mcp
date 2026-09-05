@@ -14,6 +14,7 @@ these machines are actually driven from.
 import asyncio
 import io
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -96,9 +97,11 @@ def test_writes_and_reads_back_a_token(monkeypatch, tmp_path):
 
     assert json.loads(path.read_text())["token"] == "pbx_written"
     assert cloud.read_credentials_file()["token"] == "pbx_written"
-    # Meaningful on POSIX; a no-op on Windows, where the per-user directory's ACL is
-    # what actually protects it.
-    assert oct(path.stat().st_mode)[-3:] == "600"
+    # `sys.platform` is faked above, but the filesystem underneath is not: on real
+    # NTFS a chmod cannot clear the group/other bits, so only assert the mode where
+    # it means something. On Windows the per-user directory's ACL is what protects it.
+    if os.name == "posix":
+        assert oct(path.stat().st_mode)[-3:] == "600"
 
 
 def test_an_unreadable_credentials_file_is_the_same_as_none(monkeypatch, tmp_path):
