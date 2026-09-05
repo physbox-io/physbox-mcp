@@ -636,6 +636,40 @@ async def circuit_update_component(id: str, updates: dict) -> Any:
     # of the same name is exactly what used to collide with it.
     return await get_conn(C).send("UPDATE_COMPONENT", {"nodeId": id, "updates": updates})
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_get_pcb_layout", "Place and route the board, and return what came out"))
+async def circuit_get_pcb_layout(
+    includePads: bool = False,
+    includeTraces: bool = False,
+    component: str | None = None,
+    options: dict | None = None,
+) -> Any:
+    payload: dict[str, Any] = {"includePads": includePads, "includeTraces": includeTraces}
+    if component:
+        payload["component"] = component
+    if options:
+        payload["options"] = options
+    return await get_conn(C).send("GET_PCB_LAYOUT", payload, timeout=120.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_get_pcb_preview", "Render the laid-out board as a PNG, from either face"))
+async def circuit_get_pcb_preview(
+    view: str = "copper",
+    padNumbers: bool = True,
+    pxPerMm: float = 12,
+    options: dict | None = None,
+) -> Any:
+    payload: dict[str, Any] = {"view": view, "padNumbers": padNumbers, "pxPerMm": pxPerMm}
+    if options:
+        payload["options"] = options
+    result = await get_conn(C).send("GET_PCB_PREVIEW", payload, timeout=120.0)
+    if not isinstance(result, dict) or not result.get("ok"):
+        error = result.get("error") if isinstance(result, dict) else "Unknown error"
+        raise RuntimeError(f"PCB preview failed: {error}")
+    data_url = result.get("dataUrl", "")
+    if "," not in data_url:
+        raise ValueError("Invalid image data URL returned from Volt")
+    b64 = data_url.split(",", 1)[1]
+    return Image(data=base64.b64decode(b64), format="png")
+
 @mcp.tool(description=get_doc(circuit_docs, "circuit_get_note_cards", "Return note cards"))
 async def circuit_get_note_cards() -> Any:
     return await get_conn(C).send("GET_NOTE_CARDS")
