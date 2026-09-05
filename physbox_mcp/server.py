@@ -141,7 +141,12 @@ class AppConnection:
             loop = asyncio.get_running_loop()
             fut: asyncio.Future = loop.create_future()
             self.pending[msg_id] = fut
-            data = {"cmd": cmd, "id": msg_id, **(payload or {})}
+            # The envelope wins over the payload. Spread the other way round, a
+            # tool argument called "id" (update_component's component id) landed
+            # on top of the request id: the app answered under the component's
+            # name, nothing matched the pending future, and every call to those
+            # tools timed out after ten seconds having already applied its edit.
+            data = {**(payload or {}), "cmd": cmd, "id": msg_id}
             
             asyncio.run_coroutine_threadsafe(self.ws.send(json.dumps(data)), self.ws_loop)
             
@@ -248,7 +253,7 @@ async def ws_handler(ws):
                     }))
                 else:
                     peer_pending_requests[req_id] = (ws, req_id)
-                    cmd_data = {"cmd": cmd, "id": req_id, **(payload or {})}
+                    cmd_data = {**(payload or {}), "cmd": cmd, "id": req_id}  # envelope wins; see AppConnection.send
                     asyncio.run_coroutine_threadsafe(target_conn.ws.send(json.dumps(cmd_data)), target_conn.ws_loop)
 
             elif event in ("RESULT", "ERROR"):
@@ -627,7 +632,9 @@ async def circuit_reset() -> Any:
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_update_component", "Update one component in place"))
 async def circuit_update_component(id: str, updates: dict) -> Any:
-    return await get_conn(C).send("UPDATE_COMPONENT", {"id": id, "updates": updates})
+    # Sent as nodeId, not id: the envelope already owns "id", and a payload key
+    # of the same name is exactly what used to collide with it.
+    return await get_conn(C).send("UPDATE_COMPONENT", {"nodeId": id, "updates": updates})
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_get_note_cards", "Return note cards"))
 async def circuit_get_note_cards() -> Any:
@@ -995,7 +1002,7 @@ async def etch_validate_document() -> Any:
 
 @mcp.tool(description=get_doc(etch_docs, "etch_update_element", "Update one element in place"))
 async def etch_update_element(id: str, updates: dict) -> Any:
-    return await get_conn(Et).send("UPDATE_ELEMENT", {"id": id, "updates": updates})
+    return await get_conn(Et).send("UPDATE_ELEMENT", {"elementId": id, "updates": updates})  # not "id": see circuit_update_component
 
 @mcp.tool(description=get_doc(etch_docs, "etch_save_preset", "Save the document as a user preset"))
 async def etch_save_preset(name: str) -> Any:
