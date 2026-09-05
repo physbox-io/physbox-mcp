@@ -1,0 +1,23 @@
+{
+  "overview": "PhysBox cloud tools. Unlike every other tool in this server, these do not need an app open in a browser — they read the user's PhysBox account directly, so they can answer questions about jobs that finished weeks ago. They need a PhysBox Pro account and a read token (PHYSBOX_API_TOKEN, minted at https://physbox.io/history.html). The local app tools need neither.",
+  "workflow": "Call physbox_whoami first to confirm there is a working credential and the account is Pro. To answer a question about a past job, prefer physbox_find_runs with a search term and a date range over listing everything; the run it returns already carries the settings the job was cut at. physbox_get_run adds the position/feed/spindle trace when you need to see how a cut went wrong rather than what it was set to.",
+  "gotchas": [
+    "A run's `settings` is whatever the app that planned the job recorded — material, power, speed, passes, machine profile. There is no fixed schema across apps; read it, do not assume keys.",
+    "`status` is one of running, completed, cancelled, error. `cancelled` usually means somebody stopped the job or closed the tab mid-cut, not that anything failed.",
+    "A run with no `documentId` was streamed straight from a browser; only jobs queued to a Tekno Box store their program server-side.",
+    "Free accounts archive nothing at all. An empty result from a free account means the feature was never recording, not that no jobs were run — the tools say so explicitly.",
+    "Times are UTC ISO-8601. `since`/`until` accept plain dates like 2026-03-01."
+  ],
+  "tools": {
+    "physbox_whoami": "Report the PhysBox account these cloud tools are authenticated as, and its tier. Call this first: it proves the credential works and tells you whether the archive is available before you try to read it.",
+    "physbox_list_runs": "List archived machine runs, newest first, across every app and machine on the account. Filter by app (etch/physics/circuit), device, status, and date range. Returns settings and outcome per run but not the sample trace.",
+    "physbox_find_runs": "Search archived runs by text, matching the job name, the document it came from, and the recorded settings (which is where material lives). This is the tool for questions like 'what did I cut that walnut at in March' — pass query='walnut' with a date range.",
+    "physbox_get_run": "Fetch one run in full, including its sample trace: progress, position, feed rate and spindle speed over the life of the job. Use when you need to see how a cut behaved, not just how it was configured.",
+    "physbox_runs_summary": "Aggregate the archive over a date range: how many runs, how much cutting time, how many failed, and the breakdown by machine and by material.",
+    "physbox_get_run_gcode": "Fetch the program a run cut. Only available for jobs that were queued to a machine through PhysBox rather than streamed from a browser tab.",
+    "physbox_list_documents": "List the user's cloud-saved documents (Etch drawings, Mesh scenes, Volt circuits) with their current revision. Metadata only.",
+    "physbox_get_document": "Fetch one cloud document's contents, either at its current revision or at an earlier saved revision.",
+    "physbox_document_revisions": "List the saved revisions of one cloud document, so an earlier state can be fetched or referred to.",
+    "physbox_set_token": "Save a PhysBox read token to this machine's user config so the cloud tools work in future sessions without an environment variable. Only for a token the user has given you deliberately."
+  }
+}

@@ -17,6 +17,11 @@ dependencies = [
     "fastmcp>=2.0.0",
     "websockets>=12.0",
 ]
+
+[project.optional-dependencies]
+# Only the cloud client is unit-testable without a browser attached, and it needs
+# nothing but pytest to test — see tests/test_cloud.py.
+test = ["pytest>=8.0"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",

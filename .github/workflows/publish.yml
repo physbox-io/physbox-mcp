@@ -1,16 +1,46 @@
-name: Publish to PyPI
+name: Test and publish
 
 on:
   release:
     types: [published]
+  push:
+    branches: [main]
+  pull_request:
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # Both, because half of what tests/test_cloud.py checks is where a
+      # credential file belongs — and a path helper only ever exercised on Linux
+      # is a path helper that is wrong on Windows. PhysBox Native ships Windows
+      # builds and a lot of these machines are driven from Windows.
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+      - name: Test
+        run: python -m pytest tests -q
+
   build-n-publish:
     name: Build and publish Python distribution to PyPI
+    # A release that cannot pass its own tests should not reach PyPI, where it
+    # cannot be taken back.
+    needs: test
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

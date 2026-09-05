@@ -102,6 +102,31 @@ To add a new tool or command:
 2.  **Schema update:** Add description and parameters to `mcp-docs.json` in the app's repo, and copy it to `physbox_mcp/mcp-docs/` in this repo.
 3.  **Server side:** Register the new `@mcp.tool()` in [server.py](physbox_mcp/server.py).
 
+### Cloud tools are different
+
+A tool that reads the user's PhysBox account rather than a browser tab needs none
+of the above — no browser `case`, no relay leg. It calls
+[cloud.py](physbox_mcp/cloud.py) and is registered with a description from
+`mcp-docs/cloud.json`:
+
+```python
+@mcp.tool(description=get_doc(cloud_docs, "physbox_list_runs", "..."))
+async def physbox_list_runs(app: str | None = None, limit: int = 50) -> Any:
+    return await cloud.get("/api/runs", {"app_id": app, "limit": limit})
+```
+
+`cloud.py` owns credential resolution (env var → config file → the token an
+attached tab offered during `HELLO`) and turns HTTP statuses into messages worth
+relaying — notably `403 pro_required`, which must say the archive was never
+recording rather than that no runs were found. It is the only unit-tested module
+here; see `tests/test_cloud.py`, which runs on Windows as well as Linux because
+half of what it checks is where a config file belongs.
+
+The relay binds `127.0.0.1`, not `0.0.0.0`. It has no origin check and no shared
+secret, it can drive a machine with a spinning cutter in it, and a session token
+can now arrive over it — none of which has any business being reachable from the
+LAN.
+
 ---
 
 ## CI/CD Workflow & PyPI Releases

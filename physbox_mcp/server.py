@@ -21,6 +21,8 @@ except ImportError:
     from fastmcp.utilities.types import Image
 import websockets
 
+from . import cloud
+
 # ── Configuration & Constants ──────────────────────────────────────────────────
 
 MCP_PORT = int(os.environ.get("MCP_PORT", "3141"))
@@ -64,6 +66,7 @@ physics_docs = load_mcp_docs("physics")
 process_docs = load_mcp_docs("process")
 circuit_docs = load_mcp_docs("circuit")
 etch_docs    = load_mcp_docs("etch")
+cloud_docs   = load_mcp_docs("cloud")
 
 def get_reference_docs(docs: dict) -> dict:
     """Everything in an app's mcp-docs.json EXCEPT `tools` (each tool's text is
@@ -211,6 +214,12 @@ async def ws_handler(ws):
                     conn.ws_loop = ws_loop
                     conn.connected = True
                     print(f"Registered browser connection for {app_info['name']} on port {app_info['port']}", file=sys.stderr)
+                    # A signed-in tab can offer its own session as a fallback
+                    # credential for the cloud tools, so an agent needs no setup at
+                    # all while the app is open. Deliberately the last source
+                    # `cloud.resolve_token` tries: this socket is unauthenticated,
+                    # so anything reaching it could have offered a token too.
+                    cloud.set_browser_token(msg.get("token"))
                     await ws.send(json.dumps({"event": "CONNECTED", "role": "browser"}))
                     await broadcast_app_status(app_info["port"], True)
                 else:
@@ -341,7 +350,11 @@ def start_ws_bridge():
         global is_primary
         while True:
             try:
-                async with websockets.serve(ws_handler, "0.0.0.0", MCP_WS_PORT):
+                # Loopback, not 0.0.0.0. This hub has no origin check and no shared
+                # secret, and it can drive a machine with a spinning cutter in it —
+                # it had no business being reachable from the LAN even before a
+                # credential could arrive over it.
+                async with websockets.serve(ws_handler, "127.0.0.1", MCP_WS_PORT):
                     is_primary = True
                     print(f"MCP Primary WebSocket Hub listening on ws://localhost:{MCP_WS_PORT}", file=sys.stderr)
                     await asyncio.Future()
@@ -608,6 +621,22 @@ async def circuit_download_audio(
     )
     return await get_conn(C).send("GET_SPEAKER_AUDIO", payload)
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_reset", "Reset the simulation to t=0"))
+async def circuit_reset() -> Any:
+    return await get_conn(C).send("RESET")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_update_component", "Update one component in place"))
+async def circuit_update_component(id: str, updates: dict) -> Any:
+    return await get_conn(C).send("UPDATE_COMPONENT", {"id": id, "updates": updates})
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_get_note_cards", "Return note cards"))
+async def circuit_get_note_cards() -> Any:
+    return await get_conn(C).send("GET_NOTE_CARDS")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_set_note_cards", "Replace note cards"))
+async def circuit_set_note_cards(noteCards: list[Any]) -> Any:
+    return await get_conn(C).send("SET_NOTE_CARDS", {"noteCards": noteCards})
+
 # ── PhysBox: Mesh (Physics) Tools ─────────────────────────────────────────────
 
 @mcp.tool(description=get_doc(physics_docs, "physics_validate_scad", "Validate OpenSCAD code and return compilation result or errors"))
@@ -794,6 +823,62 @@ async def physics_paint(
 async def physics_clear_paint(id: str | None = None, geomName: str | None = None) -> Any:
     return await get_conn(Ph).send("CLEAR_PAINT", {"targetId": id, "geomName": geomName})
 
+@mcp.tool(description=get_doc(physics_docs, "physics_create_sculpt", "Add a sculptable body from a base shape"))
+async def physics_create_sculpt(
+    name: str | None = None,
+    base: str = "sphere",
+    pos: list[float] | None = None,
+) -> Any:
+    payload = compact_dict(name=name, base=base, pos=pos)
+    return await get_conn(Ph).send("CREATE_SCULPT", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_set_sculpt_base", "Replace a sculpt's base shape"))
+async def physics_set_sculpt_base(id: str, base: str) -> Any:
+    return await get_conn(Ph).send("SET_SCULPT_BASE", {"targetId": id, "base": base}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_sculpt", "Brush a sculpt body's surface"))
+async def physics_sculpt(
+    id: str,
+    at: list[Any],
+    brush: str = "draw",
+    radius: float = 0.04,
+    strength: float = 0.5,
+    invert: bool = False,
+    symmetry: str | None = None,
+    detail: float | None = None,
+    dynamicTopology: bool | None = None,
+    delta: list[float] | None = None,
+) -> Any:
+    payload = compact_dict(
+        targetId=id,
+        at=at,
+        brush=brush,
+        radius=radius,
+        strength=strength,
+        invert=invert,
+        symmetry=symmetry,
+        detail=detail,
+        dynamicTopology=dynamicTopology,
+        delta=delta,
+    )
+    return await get_conn(Ph).send("SCULPT", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_delete_object", "Delete a body from the scene"))
+async def physics_delete_object(id: str) -> Any:
+    return await get_conn(Ph).send("DELETE_OBJECT", {"targetId": id}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_probe_sculpt", "Find the surface nearest some points"))
+async def physics_probe_sculpt(id: str, at: list[Any]) -> Any:
+    return await get_conn(Ph).send("PROBE_SCULPT", {"targetId": id, "at": at})
+
+@mcp.tool(description=get_doc(physics_docs, "physics_undo_sculpt", "Undo the last sculpt stroke"))
+async def physics_undo_sculpt(id: str) -> Any:
+    return await get_conn(Ph).send("UNDO_SCULPT", {"targetId": id}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_get_sculpt", "Return a sculpt body's mesh statistics"))
+async def physics_get_sculpt(id: str) -> Any:
+    return await get_conn(Ph).send("GET_SCULPT", {"targetId": id})
+
 @mcp.tool(description=get_doc(physics_docs, "physics_get_note_cards", "Return note cards"))
 async def physics_get_note_cards() -> Any:
     return await get_conn(Ph).send("GET_NOTE_CARDS")
@@ -900,11 +985,134 @@ async def etch_list_capabilities() -> Any:
 async def etch_generate_gcode(options: dict | None = None) -> Any:
     return await get_conn(Et).send("GENERATE_GCODE", {"options": options or {}})
 
+@mcp.tool(description=get_doc(etch_docs, "etch_get_summary", "Return a lightweight document summary"))
+async def etch_get_summary() -> Any:
+    return await get_conn(Et).send("GET_SUMMARY")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_validate_document", "Check the document for faults before machining"))
+async def etch_validate_document() -> Any:
+    return await get_conn(Et).send("VALIDATE_DOCUMENT")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_update_element", "Update one element in place"))
+async def etch_update_element(id: str, updates: dict) -> Any:
+    return await get_conn(Et).send("UPDATE_ELEMENT", {"id": id, "updates": updates})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_save_preset", "Save the document as a user preset"))
+async def etch_save_preset(name: str) -> Any:
+    return await get_conn(Et).send("SAVE_PRESET", {"name": name})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_delete_preset", "Delete a saved user preset"))
+async def etch_delete_preset(name: str) -> Any:
+    return await get_conn(Et).send("DELETE_PRESET", {"name": name})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_get_screenshot", "Capture the canvas as a PNG"))
+async def etch_get_screenshot(scale: float = 2.0) -> Any:
+    return await get_conn(Et).send("SCREENSHOT", {"scale": scale}, timeout=30.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_get_note_card", "Return the document's note card markdown"))
+async def etch_get_note_card() -> Any:
+    return await get_conn(Et).send("GET_NOTE_CARD")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_set_note_card", "Set the document's note card markdown"))
+async def etch_set_note_card(markdown: str) -> Any:
+    return await get_conn(Et).send("SET_NOTE_CARD", {"markdown": markdown})
+
 @mcp.tool(description=get_doc(etch_docs, "etch_get_schema", "Return PhysBox: Etch schema"))
 async def etch_get_schema() -> Any:
     return get_reference_docs(etch_docs)
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+
+# ── PhysBox Cloud Tools (account, no browser required) ────────────────────────
+#
+# Everything above this line drives a tab over the local WebSocket hub and needs
+# nothing but the app being open. These read the user's PhysBox account over HTTPS
+# instead, which is what lets an agent answer a question about a job that finished
+# last month with nothing running.
+#
+# They are the Pro half. The API decides that, not this file: a free account gets a
+# 403 and cloud.py turns it into a sentence saying the archive was never recording,
+# rather than an empty list that reads as "you never cut that".
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_whoami", "Report the PhysBox account and tier these cloud tools are authenticated as"))
+async def physbox_whoami() -> Any:
+    return await cloud.get("/api/tokens/whoami")
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_list_runs", "List archived machine runs across every app and machine"))
+async def physbox_list_runs(
+    app: str | None = None,
+    device: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+) -> Any:
+    return await cloud.get("/api/runs", {
+        "app_id": app,
+        "device_id": device,
+        "since": since,
+        "until": until,
+        "status": status,
+        "limit": limit,
+    })
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_find_runs", "Search archived runs by job name, document or recorded settings"))
+async def physbox_find_runs(
+    query: str,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 50,
+) -> Any:
+    # The same route as the list, with `q` set. Kept as its own tool because the
+    # question it answers is a different question, and an agent picking tools from
+    # descriptions should not have to notice that a filter exists.
+    return await cloud.get("/api/runs", {
+        "q": query,
+        "since": since,
+        "until": until,
+        "limit": limit,
+    })
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_get_run", "Fetch one run in full, including its sample trace"))
+async def physbox_get_run(run_id: str) -> Any:
+    return await cloud.get(f"/api/runs/{run_id}")
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_runs_summary", "Aggregate the archive: run counts, cutting time, failures, materials"))
+async def physbox_runs_summary(
+    app: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+) -> Any:
+    return await cloud.get("/api/runs/summary", {"app_id": app, "since": since, "until": until})
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_get_run_gcode", "Fetch the program a run cut, when it was stored server-side"))
+async def physbox_get_run_gcode(run_id: str) -> Any:
+    return await cloud.get(f"/api/runs/{run_id}/gcode")
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_list_documents", "List the account's cloud-saved documents"))
+async def physbox_list_documents(app: str | None = None) -> Any:
+    return await cloud.get("/api/documents", {"app_id": app})
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_get_document", "Fetch one cloud document, current or at an earlier revision"))
+async def physbox_get_document(document_id: str, revision: int | None = None) -> Any:
+    if revision is not None:
+        return await cloud.get(f"/api/documents/{document_id}/revisions/{revision}")
+    return await cloud.get(f"/api/documents/{document_id}")
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_document_revisions", "List the saved revisions of one cloud document"))
+async def physbox_document_revisions(document_id: str) -> Any:
+    return await cloud.get(f"/api/documents/{document_id}/revisions")
+
+@mcp.tool(description=get_doc(cloud_docs, "physbox_set_token", "Save a PhysBox read token to this machine's user config"))
+async def physbox_set_token(token: str) -> Any:
+    # Writes the user's own credential where the next session will find it, so the
+    # setup step happens once instead of every time. The token is never echoed
+    # back — only where it went.
+    if not token.startswith("pbx_"):
+        raise ValueError("A PhysBox API token starts with 'pbx_'. Mint one at https://physbox.io/history.html.")
+    path = cloud.write_credentials_file(token.strip())
+    return {"saved": True, "path": str(path)}
+
 
 def main():
     use_stdio = "--stdio" in sys.argv
