@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physbox-mcp"
-version = "0.8.1"
+version = "0.9.0"
 description = "PhysBox: MCP - Server for local simulation apps"
 readme = "README.md"
 authors = [
@@ -17,15 +17,15 @@ dependencies = [
     "fastmcp>=2.0.0",
     "websockets>=12.0",
 ]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
 
 [project.optional-dependencies]
 # Only the cloud client is unit-testable without a browser attached, and it needs
 # nothing but pytest to test — see tests/test_cloud.py.
 test = ["pytest>=8.0"]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
-]
 
 [project.scripts]
 physbox-mcp = "physbox_mcp.server:main"
