@@ -677,6 +677,35 @@ async def circuit_delete_component(id: str | list[str]) -> Any:
     ids = id if isinstance(id, list) else [id]
     return await get_conn(C).send("DELETE_COMPONENT", {"nodeIds": ids})
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_define_mcu", "Define an MCU's pins, package geometry and program"))
+async def circuit_define_mcu(
+    nodeId: str,
+    presetKey: str | None = None,
+    pins: list[Any] | None = None,
+    geometry: dict[str, Any] | None = None,
+    code: str | None = None,
+    label: str | None = None,
+) -> Any:
+    # Only the arguments actually given are forwarded: Volt reads an absent
+    # `pins` as "keep what the part has" and an empty list as "a part with no
+    # pins", which it refuses. Sending None for everything unset would turn
+    # every omitted argument into the second of those.
+    payload: dict[str, Any] = {"nodeId": nodeId}
+    for key, value in (
+        ("presetKey", presetKey),
+        ("pins", pins),
+        ("geometry", geometry),
+        ("code", code),
+        ("label", label),
+    ):
+        if value is not None:
+            payload[key] = value
+    return await get_conn(C).send("DEFINE_MCU", payload)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_list_mcu_presets", "List the built-in MCU presets"))
+async def circuit_list_mcu_presets() -> Any:
+    return await get_conn(C).send("LIST_MCU_PRESETS")
+
 @mcp.tool(description=get_doc(circuit_docs, "circuit_get_note_cards", "Return note cards"))
 async def circuit_get_note_cards() -> Any:
     return await get_conn(C).send("GET_NOTE_CARDS")
