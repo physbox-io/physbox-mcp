@@ -670,6 +670,13 @@ async def circuit_get_pcb_preview(
     b64 = data_url.split(",", 1)[1]
     return Image(data=base64.b64decode(b64), format="png")
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_delete_component", "Delete components and the wires attached to them"))
+async def circuit_delete_component(id: str | list[str]) -> Any:
+    # Sent as nodeIds, not id: the envelope already owns "id", the same
+    # collision circuit_update_component works around.
+    ids = id if isinstance(id, list) else [id]
+    return await get_conn(C).send("DELETE_COMPONENT", {"nodeIds": ids})
+
 @mcp.tool(description=get_doc(circuit_docs, "circuit_get_note_cards", "Return note cards"))
 async def circuit_get_note_cards() -> Any:
     return await get_conn(C).send("GET_NOTE_CARDS")
