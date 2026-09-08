@@ -1004,13 +1004,18 @@ async def physics_lattice_sharpen(
     edges: list[Any],
     sharp: bool = True,
     mirror: str | None = None,
+    loop: bool = False,
 ) -> Any:
-    payload = compact_dict(targetId=id, edges=edges, sharp=sharp, mirror=mirror)
+    payload = compact_dict(targetId=id, edges=edges, sharp=sharp, mirror=mirror, loop=loop)
     return await get_conn(Ph).send("LATTICE_SHARPEN", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_smooth", "Set a lattice body's smoothing level"))
 async def physics_lattice_smooth(id: str, level: int) -> Any:
     return await get_conn(Ph).send("LATTICE_SMOOTH", {"targetId": id, "level": level}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_wall", "Thicken a lattice surface into a shell"))
+async def physics_lattice_wall(id: str, thicknessMm: float) -> Any:
+    return await get_conn(Ph).send("LATTICE_WALL", {"targetId": id, "thicknessMm": thicknessMm}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_undo_lattice", "Undo the last lattice operation"))
 async def physics_undo_lattice(id: str) -> Any:
