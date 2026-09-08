@@ -998,6 +998,16 @@ async def physics_lattice_delete_faces(id: str, faces: list[Any], mirror: str | 
     payload = compact_dict(targetId=id, faces=faces, mirror=mirror)
     return await get_conn(Ph).send("LATTICE_DELETE_FACES", payload, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_sharpen", "Keep edges sharp under smoothing"))
+async def physics_lattice_sharpen(
+    id: str,
+    edges: list[Any],
+    sharp: bool = True,
+    mirror: str | None = None,
+) -> Any:
+    payload = compact_dict(targetId=id, edges=edges, sharp=sharp, mirror=mirror)
+    return await get_conn(Ph).send("LATTICE_SHARPEN", payload, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_smooth", "Set a lattice body's smoothing level"))
 async def physics_lattice_smooth(id: str, level: int) -> Any:
     return await get_conn(Ph).send("LATTICE_SMOOTH", {"targetId": id, "level": level}, timeout=60.0)
