@@ -956,6 +956,56 @@ async def physics_undo_sculpt(id: str) -> Any:
 async def physics_get_sculpt(id: str) -> Any:
     return await get_conn(Ph).send("GET_SCULPT", {"targetId": id})
 
+# --- Lattice modelling -------------------------------------------------------
+#
+# The counterpart to sculpting, and the easier of the two to drive without a
+# screen: a lattice's whole state is points on a grid, so a coordinate can be
+# said rather than probed for, and it means the same thing on the next call.
+# Everything here is millimetres in the body's own frame.
+
+@mcp.tool(description=get_doc(physics_docs, "physics_create_lattice", "Add a grid-modelled body"))
+async def physics_create_lattice(
+    name: str | None = None,
+    pos: list[float] | None = None,
+    sizeMm: float = 40.0,
+    edit: bool = False,
+) -> Any:
+    payload = compact_dict(name=name, pos=pos, sizeMm=sizeMm, edit=edit)
+    return await get_conn(Ph).send("CREATE_LATTICE", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_get_lattice", "Read a lattice body's faces back"))
+async def physics_get_lattice(id: str) -> Any:
+    return await get_conn(Ph).send("GET_LATTICE", {"targetId": id})
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_faces", "Draw faces on a lattice body"))
+async def physics_lattice_faces(id: str, faces: list[Any], mirror: str | None = None) -> Any:
+    payload = compact_dict(targetId=id, faces=faces, mirror=mirror)
+    return await get_conn(Ph).send("LATTICE_FACES", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_extrude", "Push a face out along its axis"))
+async def physics_lattice_extrude(
+    id: str,
+    face: list[Any],
+    distanceMm: float,
+    axis: str | None = None,
+    mirror: str | None = None,
+) -> Any:
+    payload = compact_dict(targetId=id, face=face, distanceMm=distanceMm, axis=axis, mirror=mirror)
+    return await get_conn(Ph).send("LATTICE_EXTRUDE", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_delete_faces", "Remove faces from a lattice body"))
+async def physics_lattice_delete_faces(id: str, faces: list[Any], mirror: str | None = None) -> Any:
+    payload = compact_dict(targetId=id, faces=faces, mirror=mirror)
+    return await get_conn(Ph).send("LATTICE_DELETE_FACES", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_smooth", "Set a lattice body's smoothing level"))
+async def physics_lattice_smooth(id: str, level: int) -> Any:
+    return await get_conn(Ph).send("LATTICE_SMOOTH", {"targetId": id, "level": level}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_undo_lattice", "Undo the last lattice operation"))
+async def physics_undo_lattice(id: str) -> Any:
+    return await get_conn(Ph).send("UNDO_LATTICE", {"targetId": id}, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_get_note_cards", "Return note cards"))
 async def physics_get_note_cards() -> Any:
     return await get_conn(Ph).send("GET_NOTE_CARDS")
