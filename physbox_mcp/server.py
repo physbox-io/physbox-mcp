@@ -993,6 +993,20 @@ async def physics_lattice_extrude(
     payload = compact_dict(targetId=id, face=face, distanceMm=distanceMm, axis=axis, mirror=mirror)
     return await get_conn(Ph).send("LATTICE_EXTRUDE", payload, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_inset", "Shrink a face inside itself"))
+async def physics_lattice_inset(id: str, face: list[Any], amountMm: float, mirror: str | None = None) -> Any:
+    payload = compact_dict(targetId=id, face=face, amountMm=amountMm, mirror=mirror)
+    return await get_conn(Ph).send("LATTICE_INSET", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_bevel", "Cut the corners off a face"))
+async def physics_lattice_bevel(id: str, face: list[Any], amountMm: float, mirror: str | None = None) -> Any:
+    payload = compact_dict(targetId=id, face=face, amountMm=amountMm, mirror=mirror)
+    return await get_conn(Ph).send("LATTICE_BEVEL", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_bridge", "Join two faces with a band of quads"))
+async def physics_lattice_bridge(id: str, faceA: list[Any], faceB: list[Any]) -> Any:
+    return await get_conn(Ph).send("LATTICE_BRIDGE", {"targetId": id, "faceA": faceA, "faceB": faceB}, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_delete_faces", "Remove faces from a lattice body"))
 async def physics_lattice_delete_faces(id: str, faces: list[Any], mirror: str | None = None) -> Any:
     payload = compact_dict(targetId=id, faces=faces, mirror=mirror)
