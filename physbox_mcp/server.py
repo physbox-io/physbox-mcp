@@ -1013,6 +1013,10 @@ async def physics_lattice_sharpen(
 async def physics_lattice_smooth(id: str, level: int) -> Any:
     return await get_conn(Ph).send("LATTICE_SMOOTH", {"targetId": id, "level": level}, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_orient", "Turn every face outwards"))
+async def physics_lattice_orient(id: str) -> Any:
+    return await get_conn(Ph).send("LATTICE_ORIENT", {"targetId": id}, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_wall", "Thicken a lattice surface into a shell"))
 async def physics_lattice_wall(id: str, thicknessMm: float) -> Any:
     return await get_conn(Ph).send("LATTICE_WALL", {"targetId": id, "thicknessMm": thicknessMm}, timeout=60.0)
