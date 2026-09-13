@@ -718,7 +718,13 @@ async def circuit_set_note_cards(noteCards: list[Any]) -> Any:
 
 @mcp.tool(description=get_doc(physics_docs, "physics_validate_scad", "Validate OpenSCAD code and return compilation result or errors"))
 async def physics_validate_scad(scad: str) -> Any:
-    return await get_conn(Ph).send("VALIDATE_SCAD", {"scad": scad})
+    # Two minutes, not the default ten seconds. OpenSCAD is the slowest thing in
+    # the app and the cost is in CIRCLES: a ring at $fn=60 compiles in under a
+    # second, the same ring at $fn=360 takes seven, and a plate with eight holes
+    # at $fn=180 takes half a minute. At the default the reply came back as a
+    # timeout, which reads exactly like the code being rejected — and a coarser
+    # version of the same design "worked", which is the wrong lesson entirely.
+    return await get_conn(Ph).send("VALIDATE_SCAD", {"scad": scad}, timeout=120.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_state", "Return PhysBox: Mesh state"))
 async def physics_get_state() -> Any:
@@ -767,6 +773,19 @@ async def physics_delete_preset(preset: str) -> Any:
 @mcp.tool(description=get_doc(physics_docs, "physics_check_collisions", "Check for initial axis-aligned bounding box overlaps/interpenetrations between scene bodies at t=0."))
 async def physics_check_collisions() -> Any:
     return await get_conn(Ph).send("CHECK_COLLISIONS")
+
+@mcp.tool(description=get_doc(physics_docs, "physics_measure", "Measure a distance or an angle in the drawn scene, snapping to real features"))
+async def physics_measure(
+    start: list[float],
+    end: list[float],
+    corner: list[float] | None = None,
+    snap: bool = True,
+    withinMm: float = 3.0,
+) -> Any:
+    # start/end rather than from/to: `from` is a Python keyword, and a parameter
+    # called from_ is a wart every caller would have to see.
+    payload = compact_dict(**{"from": start, "to": end, "corner": corner, "snap": snap, "withinMm": withinMm})
+    return await get_conn(Ph).send("MEASURE", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_import_stl", "Import a binary or ASCII STL file into the 3D physics simulation as a parametric OpenSCAD node, raw mesh, or primitive."))
 async def physics_import_stl(
@@ -1003,6 +1022,46 @@ async def physics_lattice_bevel(id: str, face: list[Any], amountMm: float, mirro
     payload = compact_dict(targetId=id, face=face, amountMm=amountMm, mirror=mirror)
     return await get_conn(Ph).send("LATTICE_BEVEL", payload, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_bevel_edges", "Chamfer or round edges of the solid"))
+async def physics_lattice_bevel_edges(
+    id: str,
+    edges: list[Any],
+    radiusMm: float,
+    mode: str = "chamfer",
+    mirror: str | None = None,
+    loop: bool = False,
+) -> Any:
+    payload = compact_dict(targetId=id, edges=edges, radiusMm=radiusMm, mode=mode, mirror=mirror, loop=loop)
+    return await get_conn(Ph).send("LATTICE_BEVEL_EDGES", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_circle", "Place a circle or regular polygon as one face"))
+async def physics_lattice_circle(
+    id: str,
+    centre: list[float],
+    diameterMm: float,
+    axis: str = "z",
+    sides: int = 0,
+    mirror: str | None = None,
+) -> Any:
+    payload = compact_dict(targetId=id, centre=centre, diameterMm=diameterMm, axis=axis, sides=sides, mirror=mirror)
+    return await get_conn(Ph).send("LATTICE_CIRCLE", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_revolve", "Sweep a profile about an axis, the way a lathe does"))
+async def physics_lattice_revolve(
+    id: str,
+    profile: list[Any],
+    axis: str = "z",
+    degrees: float = 360.0,
+    closed: bool = False,
+    throughMm: list[float] | None = None,
+    segments: int = 0,
+) -> Any:
+    payload = compact_dict(
+        targetId=id, profile=profile, axis=axis, degrees=degrees,
+        closed=closed, throughMm=throughMm, segments=segments,
+    )
+    return await get_conn(Ph).send("LATTICE_REVOLVE", payload, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_bridge", "Join two faces with a band of quads"))
 async def physics_lattice_bridge(id: str, faceA: list[Any], faceB: list[Any]) -> Any:
     return await get_conn(Ph).send("LATTICE_BRIDGE", {"targetId": id, "faceA": faceA, "faceB": faceB}, timeout=60.0)
@@ -1030,6 +1089,39 @@ async def physics_lattice_smooth(id: str, level: int) -> Any:
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_orient", "Turn every face outwards"))
 async def physics_lattice_orient(id: str) -> Any:
     return await get_conn(Ph).send("LATTICE_ORIENT", {"targetId": id}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_cut", "Cut a hole, slot or dish out of a body"))
+async def physics_cut(
+    id: str,
+    shape: str = "hole",
+    at: list[float] | None = None,
+    normal: list[float] | None = None,
+    diameterMm: float | None = None,
+    widthMm: float | None = None,
+    lengthMm: float | None = None,
+    depthMm: float | None = None,
+) -> Any:
+    payload = compact_dict(
+        targetId=id, shape=shape, at=at, normal=normal,
+        diameterMm=diameterMm, widthMm=widthMm, lengthMm=lengthMm, depthMm=depthMm,
+    )
+    return await get_conn(Ph).send("BODY_CUT", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_lattice_dimension", "Set the size or place of part of a lattice shape"))
+async def physics_lattice_dimension(
+    id: str,
+    corners: list[Any],
+    axis: str,
+    valueMm: float,
+    mode: str = "size",
+) -> Any:
+    payload = compact_dict(targetId=id, corners=corners, axis=axis, mode=mode, valueMm=valueMm)
+    return await get_conn(Ph).send("LATTICE_DIMENSION", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_combine", "Merge other bodies into this one with a boolean"))
+async def physics_combine(id: str, withIds: list[str], op: str = "union") -> Any:
+    payload = compact_dict(targetId=id, withIds=withIds, op=op)
+    return await get_conn(Ph).send("COMBINE_BODIES", payload, timeout=120.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_wall", "Thicken a lattice surface into a shell"))
 async def physics_lattice_wall(id: str, thicknessMm: float) -> Any:
@@ -1112,6 +1204,15 @@ async def etch_combine(elementIds: list[str], op: str) -> Any:
     # Order is the operation, not a detail: elementIds[0] is the base, and for
     # 'subtract' it is the shape being cut into. Passed through as sent.
     return await get_conn(Et).send("COMBINE", {"elementIds": elementIds, "op": op})
+
+@mcp.tool(description=get_doc(etch_docs, "etch_fill_region", "Fill the region of the drawing enclosing a point, as a hatched shape"))
+async def etch_fill_region(x: float, y: float, layerId: str | None = None) -> Any:
+    # The paint bucket by coordinate: the browser rasterises the sheet and
+    # traces the region, which on a large drawing is a second or two of work.
+    payload: dict[str, Any] = {"x": x, "y": y}
+    if layerId:
+        payload["layerId"] = layerId
+    return await get_conn(Et).send("FILL_REGION", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(etch_docs, "etch_make_test_grid", "Generate a material test grid, replacing the open document"))
 async def etch_make_test_grid(options: dict | None = None) -> Any:
