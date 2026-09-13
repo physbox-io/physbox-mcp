@@ -303,7 +303,7 @@ async def run_peer_client_loop():
     global peer_ws, peer_ws_loop
     peer_ws_url = f"ws://localhost:{MCP_WS_PORT}"
     try:
-        async with websockets.connect(peer_ws_url) as ws:
+        async with websockets.connect(peer_ws_url, max_size=32 * 1024 * 1024) as ws:
             peer_ws = ws
             peer_ws_loop = asyncio.get_running_loop()
             peer_id = "".join(random.choices(string.ascii_letters, k=8))
@@ -359,7 +359,7 @@ def start_ws_bridge():
                 # secret, and it can drive a machine with a spinning cutter in it —
                 # it had no business being reachable from the LAN even before a
                 # credential could arrive over it.
-                async with websockets.serve(ws_handler, "127.0.0.1", MCP_WS_PORT):
+                async with websockets.serve(ws_handler, "127.0.0.1", MCP_WS_PORT, max_size=32 * 1024 * 1024):
                     is_primary = True
                     print(f"MCP Primary WebSocket Hub listening on ws://localhost:{MCP_WS_PORT}", file=sys.stderr)
                     await asyncio.Future()
