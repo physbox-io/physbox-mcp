@@ -8,6 +8,7 @@ import sys
 import json
 import random
 import string
+import time
 import base64
 import urllib.request
 import asyncio
@@ -42,9 +43,66 @@ Et = APPS["etch"]["port"]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
 def compact_dict(**kwargs) -> dict:
     """Return a dictionary containing only non-None values."""
     return {k: v for k, v in kwargs.items() if v is not None}
+
+def _deliver_export(result: Any, out_dir: str | None) -> dict:
+    """Turn an export reply into something an agent can actually hold.
+
+    The browser hands back whole files as base64 — an STL or a G-code program is
+    megabytes, and megabytes of base64 returned through an MCP tool is the agent's
+    entire context spent on characters it cannot read. So the payloads never leave
+    this function: with out_dir they are decoded to disk and the caller gets paths,
+    without it the caller gets names and byte counts and knows to ask again with a
+    directory. Either way `base64` is stripped from what is returned.
+    """
+    if not isinstance(result, dict):
+        return {"summary": result, "warnings": [], "files": []}
+    if result.get("ok") is False:
+        raise RuntimeError(result.get("error") or "Export failed in the app with no reason given.")
+
+    files = result.get("files") or []
+    out: list[dict] = []
+    target = Path(out_dir).expanduser() if out_dir else None
+    if target is not None:
+        target.mkdir(parents=True, exist_ok=True)
+
+    for f in files:
+        name = str(f.get("name") or "export.bin")
+        try:
+            data = base64.b64decode(f.get("base64") or "")
+        except Exception:
+            data = b""
+        # The app only encodes the bytes when it was told they would be kept, so
+        # with no out_dir there is nothing to decode and the size it reported is
+        # the only true one. Falling back to len(data) there would report 0.
+        size = f.get("bytes")
+        if not isinstance(size, int):
+            size = len(data)
+        if target is not None:
+            # basename only: the app names these files, and a name with a path in
+            # it has no business deciding where a write lands.
+            path = target / Path(name).name
+            path.write_bytes(data)
+            out.append({"name": name, "path": str(path), "bytes": len(data)})
+        else:
+            out.append({"name": name, "bytes": size})
+
+    delivered = {
+        "summary": result.get("summary"),
+        "warnings": result.get("warnings") or [],
+        "files": out,
+    }
+    if target is None and out:
+        delivered["note"] = (
+            "File contents were not returned (they are far too large for a tool result). "
+            "Call again with out_dir set to a directory to write them to disk."
+        )
+    return delivered
 
 def load_mcp_docs(app_id: str) -> dict:
     current_dir = Path(__file__).parent.resolve()
@@ -125,35 +183,122 @@ class AppConnection:
         self.ws_loop = None
         self.pending: dict[str, asyncio.Future] = {}
         self.connected = False
+        # One port, many tabs. Before this, every tab of an app registered on the
+        # same AppConnection and each one clobbered `ws`, so a command went to
+        # whichever tab had spoken last and a reply came back from whichever tab
+        # answered first. That is fine until it isn't: a body created in tab A is
+        # invisible to the next command if tab B answers it, and a save answered
+        # by a stale tab writes stale data over good data. So keep every tab as
+        # its own session and deliberately talk to exactly one of them.
+        #
+        # Insertion-ordered by design: the last key is the most recently connected
+        # session, which is the default target. A reconnecting sessionId is popped
+        # before it is re-inserted so it moves to the end rather than doubling up.
+        self.sessions: dict[str, dict] = {}
+        # None means "no one has chosen", which is the normal case and is why a
+        # single-tab agent never has to think about sessions at all.
+        self.selected_session: str | None = None
+        # Which session each in-flight request went to, so that a tab closing can
+        # fail exactly its own requests instead of everyone's.
+        self.pending_session: dict[str, str] = {}
 
     def start(self):
         pass
+
+    def active_session_id(self) -> str | None:
+        """The session `send` will talk to: the pinned one if it is still here,
+        otherwise the most recently connected. Returns None when no tab is open."""
+        if self.selected_session and self.selected_session in self.sessions:
+            return self.selected_session
+        if self.selected_session:
+            # The pinned tab went away. Drop the pin rather than keep erroring, so
+            # the default rule takes over silently.
+            self.selected_session = None
+        if not self.sessions:
+            return None
+        return next(reversed(self.sessions))
+
+    def add_session(self, session_id: str, ws, ws_loop, info: dict) -> None:
+        now = _now_ms()
+        self.sessions.pop(session_id, None)
+        self.sessions[session_id] = {
+            "ws": ws,
+            "ws_loop": ws_loop,
+            "label": info.get("label") or "unnamed",
+            "href": info.get("href"),
+            "startedAt": info.get("startedAt"),
+            "connectedAt": now,
+            "lastSeen": now,
+        }
+        self.ws = ws
+        self.ws_loop = ws_loop
+        self.connected = True
+
+    def drop_session(self, session_id: str) -> None:
+        self.sessions.pop(session_id, None)
+        if self.selected_session == session_id:
+            self.selected_session = None
+        active = self.active_session_id()
+        if active is None:
+            self.connected = False
+            self.ws = None
+            self.ws_loop = None
+        else:
+            entry = self.sessions[active]
+            self.ws = entry["ws"]
+            self.ws_loop = entry["ws_loop"]
+
+    def touch(self, session_id: str | None) -> None:
+        entry = self.sessions.get(session_id) if session_id else None
+        if entry:
+            entry["lastSeen"] = _now_ms()
+
+    def describe_sessions(self) -> list[dict]:
+        active = self.active_session_id()
+        return [
+            {
+                "sessionId": sid,
+                "label": entry["label"],
+                "href": entry["href"],
+                "startedAt": entry["startedAt"],
+                "connectedAt": entry["connectedAt"],
+                "lastSeen": entry["lastSeen"],
+                "selected": sid == active,
+                "pinned": sid == self.selected_session,
+            }
+            for sid, entry in self.sessions.items()
+        ]
 
     async def send(self, cmd: str, payload: dict | None = None, timeout: float = 10.0) -> Any:
         global is_primary, peer_ws, peer_ws_loop
         
         if is_primary:
-            if not self.connected or self.ws is None or self.ws_loop is None:
+            session_id = self.active_session_id()
+            if session_id is None:
                 raise RuntimeError(
                     f"App on port {self.port} is not connected. Open the app in your browser!"
                 )
+            entry = self.sessions[session_id]
             msg_id = "".join(random.choices(string.ascii_letters, k=8))
             loop = asyncio.get_running_loop()
             fut: asyncio.Future = loop.create_future()
             self.pending[msg_id] = fut
+            self.pending_session[msg_id] = session_id
             # The envelope wins over the payload. Spread the other way round, a
             # tool argument called "id" (update_component's component id) landed
             # on top of the request id: the app answered under the component's
             # name, nothing matched the pending future, and every call to those
             # tools timed out after ten seconds having already applied its edit.
             data = {**(payload or {}), "cmd": cmd, "id": msg_id}
-            
-            asyncio.run_coroutine_threadsafe(self.ws.send(json.dumps(data)), self.ws_loop)
-            
+
+            # One socket, not a broadcast — see the note on `sessions`.
+            asyncio.run_coroutine_threadsafe(entry["ws"].send(json.dumps(data)), entry["ws_loop"])
+
             try:
                 return await asyncio.wait_for(fut, timeout=timeout)
             except asyncio.TimeoutError:
                 self.pending.pop(msg_id, None)
+                self.pending_session.pop(msg_id, None)
                 raise RuntimeError(f'Timeout waiting for "{cmd}" response ({timeout}s)')
         else:
             if not self.connected or peer_ws is None or peer_ws_loop is None:
@@ -187,6 +332,79 @@ def get_conn(port: int) -> AppConnection:
         _connections[port] = AppConnection(port)
     return _connections[port]
 
+# ── Session control ───────────────────────────────────────────────────────────
+#
+# Session state lives on the primary only: it is the process holding the browser
+# sockets, so anywhere else it would be a copy that goes stale. A secondary peer
+# therefore asks the primary rather than keeping its own table, and it asks over
+# the FORWARD_CMD channel that already exists — these two pseudo-commands are
+# recognised by the primary's handler and answered locally instead of being
+# passed on to a tab. The double underscores are there so they can never collide
+# with a real browser command name.
+LIST_SESSIONS_CMD = "__list_sessions__"
+USE_SESSION_CMD   = "__use_session__"
+SESSION_CONTROL_CMDS = (LIST_SESSIONS_CMD, USE_SESSION_CMD)
+
+def local_list_sessions() -> list[dict]:
+    """Every browser session on every known app port, primary-side."""
+    out = []
+    for app_id, app in APPS.items():
+        conn = _connections.get(app["port"])
+        sessions = conn.describe_sessions() if conn else []
+        out.append({
+            "id": app_id,
+            "name": app["name"],
+            "port": app["port"],
+            "sessions": sessions,
+        })
+    return out
+
+def local_use_session(port: int, session_id: str) -> dict:
+    conn = _connections.get(int(port))
+    known = list(conn.sessions.keys()) if conn else []
+    if session_id not in known:
+        raise RuntimeError(
+            f"No session '{session_id}' on port {port}. "
+            f"Open sessions there: {', '.join(known) if known else '(none — open the app in your browser)'}"
+        )
+    conn.selected_session = session_id
+    entry = conn.sessions[session_id]
+    return {"port": int(port), "sessionId": session_id, "label": entry["label"], "href": entry["href"]}
+
+def handle_session_control(cmd: str, payload: dict | None) -> Any:
+    payload = payload or {}
+    if cmd == LIST_SESSIONS_CMD:
+        return local_list_sessions()
+    return local_use_session(payload.get("port"), payload.get("sessionId"))
+
+async def send_session_control(cmd: str, payload: dict | None = None, timeout: float = 10.0) -> Any:
+    """Run a session-control command wherever the sessions actually are. On the
+    primary that is right here; on a peer it is a FORWARD_CMD like any other,
+    which is why this does not go through AppConnection.send — there is no port
+    to be connected to, and a peer must be able to list sessions even when the
+    app it is asking about has none."""
+    if is_primary:
+        return handle_session_control(cmd, payload)
+    if peer_ws is None or peer_ws_loop is None:
+        raise RuntimeError("Primary MCP Hub is unavailable, so browser sessions cannot be listed.")
+    msg_id = "".join(random.choices(string.ascii_letters, k=8))
+    loop = asyncio.get_running_loop()
+    fut: asyncio.Future = loop.create_future()
+    peer_local_pending[msg_id] = (loop, fut)
+    forward_data = {
+        "event": "FORWARD_CMD",
+        "id": msg_id,
+        "port": (payload or {}).get("port"),
+        "cmd": cmd,
+        "payload": payload,
+    }
+    asyncio.run_coroutine_threadsafe(peer_ws.send(json.dumps(forward_data)), peer_ws_loop)
+    try:
+        return await asyncio.wait_for(fut, timeout=timeout)
+    except asyncio.TimeoutError:
+        peer_local_pending.pop(msg_id, None)
+        raise RuntimeError(f'Timeout waiting for "{cmd}" response ({timeout}s)')
+
 def probe_port(port: int) -> dict:
     try:
         with urllib.request.urlopen(f"http://localhost:{port}", timeout=1.5) as r:
@@ -200,6 +418,7 @@ async def ws_handler(ws):
     conn = None
     is_peer = False
     peer_id = None
+    session_id = None
     ws_loop = asyncio.get_running_loop()
     try:
         async for raw in ws:
@@ -215,10 +434,17 @@ async def ws_handler(ws):
                 app_info = APPS.get(app_key)
                 if app_info:
                     conn = get_conn(app_info["port"])
-                    conn.ws = ws
-                    conn.ws_loop = ws_loop
-                    conn.connected = True
-                    print(f"Registered browser connection for {app_info['name']} on port {app_info['port']}", file=sys.stderr)
+                    # A tab that predates the session protocol sends no sessionId.
+                    # Give it one derived from its own socket so it is a session
+                    # like any other — it just cannot survive a reload, which is
+                    # exactly what "old client" means here.
+                    session_id = msg.get("sessionId") or f"conn-{id(ws):x}"
+                    conn.add_session(session_id, ws, ws_loop, {
+                        "label": msg.get("label") or (None if msg.get("sessionId") else "unknown (old client)"),
+                        "href": msg.get("href"),
+                        "startedAt": msg.get("startedAt"),
+                    })
+                    print(f"Registered browser session {session_id} for {app_info['name']} on port {app_info['port']} ({len(conn.sessions)} open)", file=sys.stderr)
                     # A signed-in tab can offer its own session as a fallback
                     # credential for the cloud tools, so an agent needs no setup at
                     # all while the app is open. Deliberately the last source
@@ -244,21 +470,37 @@ async def ws_handler(ws):
                 cmd = msg.get("cmd")
                 payload = msg.get("payload")
                 
+                if cmd in SESSION_CONTROL_CMDS:
+                    # Never reaches a tab: the peer is asking the primary about its
+                    # own session table, so answer it here.
+                    try:
+                        await ws.send(json.dumps({
+                            "event": "PEER_RESULT", "id": req_id,
+                            "data": handle_session_control(cmd, payload), "error": None,
+                        }))
+                    except Exception as e:
+                        await ws.send(json.dumps({"event": "PEER_RESULT", "id": req_id, "error": str(e)}))
+                    continue
+
                 target_conn = get_conn(port) if port else None
-                if not target_conn or not target_conn.connected or target_conn.ws is None:
+                target_session = target_conn.active_session_id() if target_conn else None
+                if target_session is None:
                     await ws.send(json.dumps({
                         "event": "PEER_RESULT",
                         "id": req_id,
                         "error": f"App on port {port} is not connected. Open the app in your browser!"
                     }))
                 else:
+                    entry = target_conn.sessions[target_session]
                     peer_pending_requests[req_id] = (ws, req_id)
                     cmd_data = {**(payload or {}), "cmd": cmd, "id": req_id}  # envelope wins; see AppConnection.send
-                    asyncio.run_coroutine_threadsafe(target_conn.ws.send(json.dumps(cmd_data)), target_conn.ws_loop)
+                    asyncio.run_coroutine_threadsafe(entry["ws"].send(json.dumps(cmd_data)), entry["ws_loop"])
 
             elif event in ("RESULT", "ERROR"):
                 msg_id = msg.get("id", "")
                 if conn:
+                    conn.touch(session_id)
+                    conn.pending_session.pop(msg_id, None)
                     fut = conn.pending.pop(msg_id, None)
                     if fut and not fut.done():
                         mcp_loop = fut.get_loop()
@@ -288,16 +530,25 @@ async def ws_handler(ws):
             for req_id in dead_reqs:
                 peer_pending_requests.pop(req_id, None)
                 
-        if conn and conn.ws is ws:
-            conn.connected = False
-            conn.ws = None
-            conn.ws_loop = None
-            asyncio.create_task(broadcast_app_status(conn.port, False))
-            for fut in list(conn.pending.values()):
-                if not fut.done():
-                    mcp_loop = fut.get_loop()
-                    mcp_loop.call_soon_threadsafe(fut.set_exception, RuntimeError("WebSocket disconnected"))
-            conn.pending.clear()
+        if conn and session_id and conn.sessions.get(session_id, {}).get("ws") is ws:
+            conn.drop_session(session_id)
+            # Only the requests that went to *this* tab are dead; another tab's
+            # in-flight work is none of this socket's business. If that leaves no
+            # tabs at all the port really is down, and the peers are told so.
+            dead = [mid for mid, sid in conn.pending_session.items() if sid == session_id]
+            for mid in dead:
+                conn.pending_session.pop(mid, None)
+                fut = conn.pending.pop(mid, None)
+                if fut and not fut.done():
+                    fut.get_loop().call_soon_threadsafe(fut.set_exception, RuntimeError("WebSocket disconnected"))
+            if not conn.sessions:
+                asyncio.create_task(broadcast_app_status(conn.port, False))
+                for fut in list(conn.pending.values()):
+                    if not fut.done():
+                        mcp_loop = fut.get_loop()
+                        mcp_loop.call_soon_threadsafe(fut.set_exception, RuntimeError("WebSocket disconnected"))
+                conn.pending.clear()
+                conn.pending_session.clear()
 
 async def run_peer_client_loop():
     global peer_ws, peer_ws_loop
@@ -397,17 +648,43 @@ async def detect_apps() -> list[dict]:
     Returns port, app name, HTTP status, and WebSocket connection status.
     Call this first to discover which apps are active.
     """
+    # Sessions live on the primary, so on a peer this is a round trip. It is a
+    # best-effort one: if the primary is unreachable the app list is still worth
+    # returning, just without the session columns.
+    try:
+        by_port = {entry["port"]: entry["sessions"] for entry in await send_session_control(LIST_SESSIONS_CMD)}
+    except Exception:
+        # Falls back to whatever this process knows, which on a primary that has
+        # not finished binding its port yet is the right answer anyway, and on a
+        # peer with no hub is an honest empty list.
+        by_port = {entry["port"]: entry["sessions"] for entry in local_list_sessions()}
+
     results = []
     for app_id, app in APPS.items():
         probe = probe_port(app["port"])
         conn = get_conn(app["port"])
-        results.append({
+        sessions = by_port.get(app["port"], [])
+        selected = next((s["sessionId"] for s in sessions if s.get("selected")), None)
+        pinned = any(s.get("pinned") for s in sessions)
+        row = {
             "id": app_id,
             "name": app["name"],
             "port": app["port"],
             "httpOpen": probe["open"],
             "wsConnected": conn.connected,
-        })
+            "sessionCount": len(sessions),
+            "selectedSession": selected,
+        }
+        if len(sessions) > 1 and not pinned:
+            # Say so rather than let an agent assume its commands are going where
+            # it is looking. Two tabs with no choice made is exactly the situation
+            # that used to produce silently split state.
+            row["note"] = (
+                f"{len(sessions)} browser tabs are open on port {app['port']} and none has been chosen; "
+                f"commands go to the most recent one ({selected}). "
+                "Call list_sessions to see them and use_session to pin one."
+            )
+        results.append(row)
     return results
 
 @mcp.tool()
@@ -417,6 +694,82 @@ async def send_command(port: int, cmd: str, payload: dict | None = None) -> Any:
     port: 5173 (process), 5174 (circuit), 5175 (physics).
     """
     return await get_conn(port).send(cmd, payload)
+
+@mcp.tool(description=get_doc(physics_docs, "list_sessions", (
+    "List every browser tab (session) currently connected to each app, with its sessionId, "
+    "label, page url, when the tab started and when it connected, and which one commands are "
+    "currently being sent to. Commands go to exactly one tab per app — the pinned one, or the "
+    "most recently connected if none is pinned. Use this when more than one tab is open and you "
+    "need to know which one you are driving, then use_session to pin a different one."
+)))
+async def list_sessions() -> Any:
+    return await send_session_control(LIST_SESSIONS_CMD)
+
+@mcp.tool(description=get_doc(physics_docs, "use_session", (
+    "Pin one browser tab as the target for every subsequent command on that app's port, so work "
+    "stays in one tab instead of following whichever tab connected last. port is the app port "
+    "(5173 Flux, 5174 Volt, 5175 Mesh, 5176 Etch); session_id comes from list_sessions. The pin "
+    "clears itself if that tab closes, and selection falls back to the most recent tab."
+)))
+async def use_session(port: int, session_id: str) -> Any:
+    return await send_session_control(USE_SESSION_CMD, {"port": port, "sessionId": session_id})
+
+@mcp.tool(description=get_doc(physics_docs, "physics_export_cast", (
+    "Export the current Mesh scene as a casting pattern: pattern/mould geometry plus gating, sized "
+    "for the chosen metal's shrinkage. Returns a summary, any warnings, and the list of files "
+    "produced — NOT their contents. Pass out_dir to actually get the files: each is written there "
+    "and the returned path tells you where. Without out_dir you only learn the names and sizes. "
+    "parting_from_base_mm places the parting line (default: chosen automatically). sprue_dia_mm "
+    "and riser_dia_mm of 0 mean size them from the part."
+)))
+async def physics_export_cast(
+    metal: str = "aluminium",
+    parting_from_base_mm: float | None = None,
+    add_gating: bool = True,
+    sprue_dia_mm: float = 0,
+    riser_dia_mm: float = 0,
+    add_riser: bool = True,
+    out_dir: str | None = None,
+) -> Any:
+    payload = compact_dict(
+        metal=metal,
+        partingFromBaseMm=parting_from_base_mm,
+        addGating=add_gating,
+        sprueDiaMm=sprue_dia_mm,
+        riserDiaMm=riser_dia_mm,
+        addRiser=add_riser,
+        # With nowhere to put the file there is no reason to encode a megabyte
+        # of mesh, push it through a socket and throw it away at this end.
+        includeFiles=out_dir is not None,
+    )
+    # 180s because this is real geometry work in a worker, not a state read: a
+    # slicing pass over a dense mesh will blow straight through the usual 60.
+    result = await get_conn(Ph).send("EXPORT_CAST", payload, timeout=180.0)
+    return _deliver_export(result, out_dir)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_export_machining", (
+    "Export the current Mesh scene as a CNC machining program (G-code and setup sheets) for the "
+    "given number of setups. Returns a summary, any warnings, and the list of files produced — "
+    "NOT their contents. Pass out_dir to actually get the files: each is written there and the "
+    "returned path tells you where. Without out_dir you only learn the names and sizes. "
+    "stock_thickness_mm of 0 means take it from the part."
+)))
+async def physics_export_machining(
+    sides: int = 1,
+    stock_thickness_mm: float = 0,
+    tool_dia_mm: float = 3.0,
+    material: str = "aluminium",
+    out_dir: str | None = None,
+) -> Any:
+    payload = compact_dict(
+        sides=sides,
+        stockThicknessMm=stock_thickness_mm,
+        toolDiaMm=tool_dia_mm,
+        material=material,
+        includeFiles=out_dir is not None,
+    )
+    result = await get_conn(Ph).send("EXPORT_MACHINING", payload, timeout=180.0)
+    return _deliver_export(result, out_dir)
 
 # ── PhysBox: Flux (Process) Tools ──────────────────────────────────────────────
 
@@ -959,6 +1312,13 @@ async def physics_sculpt(
     )
     return await get_conn(Ph).send("SCULPT", payload, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_add_object", "Add one body to the scene"))
+async def physics_add_object(body: dict[str, Any]) -> Any:
+    # ADD_OBJECT compiles any scad or boolean the body carries before it
+    # answers, the same as build_scene does, so it gets build_scene's timeout
+    # rather than the default ten seconds.
+    return await get_conn(Ph).send("ADD_OBJECT", {"body": body}, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_delete_object", "Delete a body from the scene"))
 async def physics_delete_object(id: str) -> Any:
     return await get_conn(Ph).send("DELETE_OBJECT", {"targetId": id}, timeout=60.0)
@@ -1213,6 +1573,42 @@ async def etch_fill_region(x: float, y: float, layerId: str | None = None) -> An
     if layerId:
         payload["layerId"] = layerId
     return await get_conn(Et).send("FILL_REGION", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_erase", "Mask part of one layer out of the job without changing the drawing"))
+async def etch_erase(
+    points: list[dict],
+    width: float | None = None,
+    layerId: str | None = None,
+    name: str | None = None,
+) -> Any:
+    # The eraser by coordinate: a centreline in mm and a width, landing as the
+    # same `erase` element the tool draws. Nothing underneath is edited, which
+    # is why this exists rather than "just rewrite the path" — a traced photo
+    # rewritten to drop a corner has lost the corner for good.
+    return await get_conn(Et).send("ERASE", compact_dict(
+        points=points, width=width, layerId=layerId, name=name
+    ))
+
+@mcp.tool(description=get_doc(etch_docs, "etch_add_registration", "Add pin holes for stacking sheets, placed from the stock so every sheet matches"))
+async def etch_add_registration(
+    count: int | None = None,
+    diameterMm: float | None = None,
+    insetMm: float | None = None,
+) -> Any:
+    # Positions come from the stock by a rule, not from the drawing: run it on
+    # every sheet of a layered piece and the holes land on the same millimetre,
+    # which is what hand-placed circles get wrong.
+    return await get_conn(Et).send("ADD_REGISTRATION", compact_dict(
+        count=count, diameterMm=diameterMm, insetMm=insetMm
+    ))
+
+@mcp.tool(description=get_doc(etch_docs, "etch_update_layer", "Change one layer's settings in place — operation, holding, depth, overrides"))
+async def etch_update_layer(layerId: str, updates: dict) -> Any:
+    # Layer settings were only reachable by sending the whole `layers` array
+    # through etch_set_document, which discards whatever changed on the canvas
+    # in between. Holding lives here too: `tabs` on a router, `bridges` on a
+    # laser.
+    return await get_conn(Et).send("UPDATE_LAYER", {"layerId": layerId, "updates": updates})
 
 @mcp.tool(description=get_doc(etch_docs, "etch_make_test_grid", "Generate a material test grid, replacing the open document"))
 async def etch_make_test_grid(options: dict | None = None) -> Any:
