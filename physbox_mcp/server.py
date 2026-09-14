@@ -1460,10 +1460,12 @@ async def physics_cut(
     widthMm: float | None = None,
     lengthMm: float | None = None,
     depthMm: float | None = None,
+    threadPitchMm: float | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id, shape=shape, at=at, normal=normal,
         diameterMm=diameterMm, widthMm=widthMm, lengthMm=lengthMm, depthMm=depthMm,
+        threadPitchMm=threadPitchMm,
     )
     return await get_conn(Ph).send("BODY_CUT", payload, timeout=60.0)
 
