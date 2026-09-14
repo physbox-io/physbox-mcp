@@ -1589,6 +1589,28 @@ async def etch_erase(
         points=points, width=width, layerId=layerId, name=name
     ))
 
+@mcp.tool(description=get_doc(etch_docs, "etch_list_sheets", "List the sheets open in the job, and say which one is being edited"))
+async def etch_list_sheets() -> Any:
+    return await get_conn(Et).send("LIST_SHEETS")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_select_sheet", "Switch to another sheet of the job — every other etch tool acts on the selected one"))
+async def etch_select_sheet(sheetId: str | None = None, index: int | None = None) -> Any:
+    # By id, or by position for the common "go to sheet 3". Everything else in
+    # this app edits whatever sheet is open, so this is the call that decides
+    # where the next twenty are aimed.
+    return await get_conn(Et).send("SELECT_SHEET", compact_dict(sheetId=sheetId, index=index))
+
+@mcp.tool(description=get_doc(etch_docs, "etch_new_sheet", "Add a sheet to the job — blank, or a copy of the one open"))
+async def etch_new_sheet(name: str | None = None, duplicate: bool | None = None) -> Any:
+    # duplicate=True is the one to reach for on a layered piece: sheet two is
+    # sheet one with the middle changed, and rebuilding its frame and pin holes
+    # by hand is both work and a chance to be a millimetre out.
+    return await get_conn(Et).send("NEW_SHEET", compact_dict(name=name, duplicate=duplicate))
+
+@mcp.tool(description=get_doc(etch_docs, "etch_close_sheet", "Close a sheet of the job (never the last one)"))
+async def etch_close_sheet(sheetId: str | None = None) -> Any:
+    return await get_conn(Et).send("CLOSE_SHEET", compact_dict(sheetId=sheetId))
+
 @mcp.tool(description=get_doc(etch_docs, "etch_add_registration", "Add pin holes for stacking sheets, placed from the stock so every sheet matches"))
 async def etch_add_registration(
     count: int | None = None,
