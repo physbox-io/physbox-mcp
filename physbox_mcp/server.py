@@ -610,6 +610,13 @@ def start_ws_bridge():
                 # secret, and it can drive a machine with a spinning cutter in it —
                 # it had no business being reachable from the LAN even before a
                 # credential could arrive over it.
+                #
+                # More so now that the machine tools can start motion rather than
+                # only trim it. The arming gate in the app is what stands between
+                # an agent and a moving axis; this is what stands between anyone
+                # on the network and the agent's side of that gate. Both are
+                # needed — the gate answers "may this agent move the machine",
+                # not "whose agent is this".
                 async with websockets.serve(ws_handler, "127.0.0.1", MCP_WS_PORT, max_size=32 * 1024 * 1024):
                     is_primary = True
                     print(f"MCP Primary WebSocket Hub listening on ws://localhost:{MCP_WS_PORT}", file=sys.stderr)
@@ -1058,6 +1065,152 @@ async def circuit_define_mcu(
 @mcp.tool(description=get_doc(circuit_docs, "circuit_list_mcu_presets", "List the built-in MCU presets"))
 async def circuit_list_mcu_presets() -> Any:
     return await get_conn(C).send("LIST_MCU_PRESETS")
+
+# ── Volt: the machine ─────────────────────────────────────────────────────────
+#
+# Driving the CNC that mills the board, not just designing it.
+#
+# Everything that can move an axis is refused by the app unless the person at the
+# machine has armed it — a click in Volt's own UI, which is deliberately not
+# reachable from here. `circuit_machine_arm` exists to say so clearly rather than
+# leave an agent guessing why motion is refused.
+#
+# Reading state, trimming a running cut, pausing, cancelling and e-stopping are
+# never gated. A permission system that could stand between someone and stopping
+# a machine would be worse than none.
+#
+# The timeouts below are longer than the default ten seconds because these calls
+# wait on physical motion: a probe descends slowly by design, a mesh probe is one
+# descent per point, and a homing cycle crosses the whole bed twice.
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_status", "Report the milling machine's state, position and whether it is armed"))
+async def circuit_machine_status() -> Any:
+    return await get_conn(C).send("MACHINE_STATUS")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_settings", "The controller's $$ settings, as read on connect"))
+async def circuit_machine_settings() -> Any:
+    return await get_conn(C).send("MACHINE_SETTINGS")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_list_devices", "List the Tekno Boxes paired to this account"))
+async def circuit_machine_list_devices() -> Any:
+    return await get_conn(C).send("MACHINE_LIST_DEVICES", timeout=20.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_arm", "Explains that only the person at the machine can allow Claude to move it"))
+async def circuit_machine_arm() -> Any:
+    # Cannot arm, by design. The whole safety story rests on a person deciding
+    # when the machine may move, so this reports the refusal rather than
+    # offering a way round it.
+    return await get_conn(C).send("MACHINE_ARM")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_disarm", "Hand back permission to move the machine, stopping anything running"))
+async def circuit_machine_disarm() -> Any:
+    return await get_conn(C).send("MACHINE_DISARM")
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_connect", "Open the link to the machine over USB or WiFi"))
+async def circuit_machine_connect(transport: str | None = None, deviceId: str | None = None) -> Any:
+    # USB opens a native port-picker in the browser that only the person at the
+    # keyboard can answer, so this can sit waiting on a human.
+    return await get_conn(C).send(
+        "MACHINE_CONNECT", compact_dict(transport=transport, deviceId=deviceId), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_disconnect", "Close the machine link"))
+async def circuit_machine_disconnect() -> Any:
+    return await get_conn(C).send("MACHINE_DISCONNECT", timeout=20.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_jog", "Move the tool by a relative distance in mm"))
+async def circuit_machine_jog(
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    feedRate: float | None = None,
+) -> Any:
+    return await get_conn(C).send(
+        "MACHINE_JOG", compact_dict(x=x, y=y, z=z, feedRate=feedRate), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_home", "Run the homing cycle against the limit switches"))
+async def circuit_machine_home() -> Any:
+    # A homing cycle crosses the bed twice at a searching feed.
+    return await get_conn(C).send("MACHINE_HOME", timeout=180.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_unlock", "Clear GRBL's alarm lockout"))
+async def circuit_machine_unlock() -> Any:
+    return await get_conn(C).send("MACHINE_UNLOCK", timeout=20.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_goto_origin", "Lift, then travel to the work origin"))
+async def circuit_machine_goto_origin(safeZMm: float | None = None) -> Any:
+    return await get_conn(C).send("MACHINE_GOTO_ORIGIN", compact_dict(safeZMm=safeZMm), timeout=120.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_zero_xy", "Set the current XY position as the work origin"))
+async def circuit_machine_zero_xy() -> Any:
+    return await get_conn(C).send("MACHINE_ZERO_XY", timeout=30.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_zero_z", "Set work Z0 by probing the copper, or a touch plate"))
+async def circuit_machine_zero_z(
+    touchPlateMm: float | None = None,
+    surfaceOffsetMm: float | None = None,
+) -> Any:
+    # Two stabs — a fast one to find the surface and a slow one to measure it —
+    # and the slow one is slow on purpose.
+    return await get_conn(C).send(
+        "MACHINE_ZERO_Z", compact_dict(touchPlateMm=touchPlateMm, surfaceOffsetMm=surfaceOffsetMm),
+        timeout=300.0,
+    )
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_probe_surface", "Probe a grid across the board and keep the height map"))
+async def circuit_machine_probe_surface(cols: int | None = None, rows: int | None = None) -> Any:
+    # One slow descent per point, plus a verification re-probe. A 6x6 grid is
+    # thirty-seven probes and takes minutes.
+    return await get_conn(C).send(
+        "MACHINE_PROBE_SURFACE", compact_dict(cols=cols, rows=rows), timeout=1800.0
+    )
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_frame_job", "Trace the board outline with the spindle off"))
+async def circuit_machine_frame_job(
+    safeZMm: float | None = None,
+    feedRate: float | None = None,
+) -> Any:
+    return await get_conn(C).send(
+        "MACHINE_FRAME_JOB", compact_dict(safeZMm=safeZMm, feedRate=feedRate), timeout=600.0
+    )
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_mill_pcb", "Mill the board on the canvas: isolation, drilling and profiling"))
+async def circuit_mill_pcb(options: dict | None = None) -> Any:
+    # Returns once the job is under way, not once it has finished — a board is
+    # tens of minutes of cutting, and holding a tool call open for that would
+    # time out long before it ended. Poll circuit_machine_status.
+    return await get_conn(C).send("MILL_PCB", compact_dict(options=options), timeout=300.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_pause", "Feed hold: stop without losing position"))
+async def circuit_machine_pause() -> Any:
+    return await get_conn(C).send("MACHINE_PAUSE", timeout=30.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_resume", "Pick a paused job back up"))
+async def circuit_machine_resume() -> Any:
+    return await get_conn(C).send("MACHINE_RESUME", timeout=60.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_cancel", "Stop the job and drop the rest of the program"))
+async def circuit_machine_cancel() -> Any:
+    return await get_conn(C).send("MACHINE_CANCEL", timeout=30.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_estop", "Emergency stop: soft-reset the controller and stop the spindle"))
+async def circuit_machine_estop() -> Any:
+    # Never gated and never refused. Kept short deliberately: if this one is
+    # slow to answer, the answer is not worth waiting for.
+    return await get_conn(C).send("MACHINE_ESTOP", timeout=15.0)
+
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_trim", "Trim feed, spindle or rapid on the running job"))
+async def circuit_machine_trim(
+    feed: Any = None,
+    spindle: Any = None,
+    rapid: int | None = None,
+) -> Any:
+    # Steps, not targets — GRBL has no command to set a figure. The app rejects
+    # anything else rather than silently doing nothing with it.
+    return await get_conn(C).send(
+        "MACHINE_TRIM", compact_dict(feed=feed, spindle=spindle, rapid=rapid), timeout=30.0
+    )
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_get_note_cards", "Return note cards"))
 async def circuit_get_note_cards() -> Any:
@@ -1652,8 +1805,14 @@ async def etch_machine_trim(
 ) -> Any:
     # Steps, not targets: GRBL has no "set the feed to 87%" command, and the
     # browser end rejects anything else rather than accepting it and doing
-    # nothing. There is no start, resume or jog here on purpose — a machine
-    # begins moving when the person beside it says so, not when an agent does.
+    # nothing.
+    #
+    # Trim is still the only machine command Etch exposes. That is now a matter
+    # of Etch not having been moved onto the shared machining layer yet, rather
+    # than a rule: the rule it used to state — a machine begins moving when the
+    # person beside it says so — is kept by the arming gate, which is how Volt's
+    # circuit_machine_* tools are safe to expose. Etch gets the same set when it
+    # is migrated.
     return await get_conn(Et).send("MACHINE_TRIM", compact_dict(
         feed=feed, power=power, rapid=rapid
     ))
