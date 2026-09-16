@@ -1646,6 +1646,176 @@ async def physics_lattice_wall(id: str, thicknessMm: float) -> Any:
 async def physics_undo_lattice(id: str) -> Any:
     return await get_conn(Ph).send("UNDO_LATTICE", {"targetId": id}, timeout=60.0)
 
+# ── Mesh: the machine ─────────────────────────────────────────────────────────
+#
+# Same command set as Volt's, same arming gate, same rule: the app refuses
+# anything that moves an axis until the person at the machine has allowed it,
+# and `physics_machine_arm` exists to say so rather than to do it.
+#
+# What differs is what is being cut. A solid is machined from several sides with
+# the part re-fixtured between them, so `physics_carve_scene` runs one side; and
+# `physics_machine_resume_from_line` has no equivalent in the other apps because
+# only here is a single job three hours long.
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_status", "Report the machine's state, position and whether it is armed"))
+async def physics_machine_status() -> Any:
+    return await get_conn(Ph).send("MACHINE_STATUS")
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_settings", "The controller's $$ settings, as read on connect"))
+async def physics_machine_settings() -> Any:
+    return await get_conn(Ph).send("MACHINE_SETTINGS")
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_list_devices", "List the Tekno Boxes paired to this account"))
+async def physics_machine_list_devices() -> Any:
+    return await get_conn(Ph).send("MACHINE_LIST_DEVICES", timeout=20.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_arm", "Explains that only the person at the machine can allow Claude to move it"))
+async def physics_machine_arm() -> Any:
+    return await get_conn(Ph).send("MACHINE_ARM")
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_disarm", "Hand back permission to move the machine, stopping anything running"))
+async def physics_machine_disarm() -> Any:
+    return await get_conn(Ph).send("MACHINE_DISARM")
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_connect", "Open the link to the machine over USB or WiFi"))
+async def physics_machine_connect(transport: str | None = None, deviceId: str | None = None) -> Any:
+    return await get_conn(Ph).send(
+        "MACHINE_CONNECT", compact_dict(transport=transport, deviceId=deviceId), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_disconnect", "Close the machine link"))
+async def physics_machine_disconnect() -> Any:
+    return await get_conn(Ph).send("MACHINE_DISCONNECT", timeout=20.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_jog", "Move the tool by a relative distance in mm"))
+async def physics_machine_jog(
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    feedRate: float | None = None,
+) -> Any:
+    return await get_conn(Ph).send(
+        "MACHINE_JOG", compact_dict(x=x, y=y, z=z, feedRate=feedRate), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_home", "Run the homing cycle against the limit switches"))
+async def physics_machine_home() -> Any:
+    return await get_conn(Ph).send("MACHINE_HOME", timeout=180.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_unlock", "Clear GRBL's alarm lockout"))
+async def physics_machine_unlock() -> Any:
+    return await get_conn(Ph).send("MACHINE_UNLOCK", timeout=20.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_goto_origin", "Lift, then travel to the work origin"))
+async def physics_machine_goto_origin(safeZMm: float | None = None) -> Any:
+    return await get_conn(Ph).send("MACHINE_GOTO_ORIGIN", compact_dict(safeZMm=safeZMm), timeout=120.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_zero_xy", "Set the current XY position as the work origin"))
+async def physics_machine_zero_xy() -> Any:
+    return await get_conn(Ph).send("MACHINE_ZERO_XY", timeout=30.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_zero_z", "Set work Z0, by touch plate or where the tool stands"))
+async def physics_machine_zero_z(
+    touchPlateMm: float | None = None,
+    here: bool | None = None,
+    offsetMm: float | None = None,
+    searchDepthMm: float | None = None,
+    feedRate: float | None = None,
+) -> Any:
+    return await get_conn(Ph).send(
+        "MACHINE_ZERO_Z",
+        compact_dict(
+            touchPlateMm=touchPlateMm, here=here, offsetMm=offsetMm,
+            searchDepthMm=searchDepthMm, feedRate=feedRate,
+        ),
+        timeout=300.0,
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_zero_all", "Set X, Y and Z at once where the tool stands"))
+async def physics_machine_zero_all() -> Any:
+    return await get_conn(Ph).send("MACHINE_ZERO_ALL", timeout=30.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_probe_surface", "Probe a grid across the stock"))
+async def physics_machine_probe_surface(
+    cols: int | None = None,
+    rows: int | None = None,
+    bounds: dict | None = None,
+) -> Any:
+    # One slow descent per point; a 5x5 grid takes minutes.
+    return await get_conn(Ph).send(
+        "MACHINE_PROBE_SURFACE", compact_dict(cols=cols, rows=rows, bounds=bounds), timeout=1800.0
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_frame_job", "Trace the stock outline with nothing cutting"))
+async def physics_machine_frame_job(
+    safeZMm: float | None = None,
+    guidePower: float | None = None,
+) -> Any:
+    return await get_conn(Ph).send(
+        "MACHINE_FRAME_JOB", compact_dict(safeZMm=safeZMm, guidePower=guidePower), timeout=600.0
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_carve_scene", "Machine one side of the scene that is loaded"))
+async def physics_carve_scene(
+    side: int | None = None,
+    toolDiaMm: float | None = None,
+    sides: int | None = None,
+    stockThicknessMm: float | None = None,
+    material: str | None = None,
+    acceptUnreachable: bool | None = None,
+) -> Any:
+    # Returns once the job is under way, not once it has finished — a carve runs
+    # for hours. Poll physics_machine_status.
+    return await get_conn(Ph).send(
+        "CARVE_SCENE",
+        compact_dict(
+            side=side, toolDiaMm=toolDiaMm, sides=sides,
+            stockThicknessMm=stockThicknessMm, material=material,
+            acceptUnreachable=acceptUnreachable,
+        ),
+        timeout=300.0,
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_pause", "Feed hold: stop without losing position"))
+async def physics_machine_pause() -> Any:
+    return await get_conn(Ph).send("MACHINE_PAUSE", timeout=30.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_resume", "Pick a paused job back up"))
+async def physics_machine_resume() -> Any:
+    return await get_conn(Ph).send("MACHINE_RESUME", timeout=120.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_preview_resume", "What a resume from a line would do, without doing it"))
+async def physics_machine_preview_resume(fromLine: int, options: dict | None = None) -> Any:
+    return await get_conn(Ph).send(
+        "MACHINE_PREVIEW_RESUME", compact_dict(fromLine=fromLine, options=options), timeout=30.0
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_resume_from_line", "Restart a job that ended badly, part way through"))
+async def physics_machine_resume_from_line(fromLine: int, options: dict | None = None) -> Any:
+    return await get_conn(Ph).send(
+        "MACHINE_RESUME_FROM_LINE", compact_dict(fromLine=fromLine, options=options), timeout=120.0
+    )
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_cancel", "Stop the job and drop the rest of the program"))
+async def physics_machine_cancel() -> Any:
+    return await get_conn(Ph).send("MACHINE_CANCEL", timeout=30.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_estop", "Emergency stop: soft-reset the controller and stop the spindle"))
+async def physics_machine_estop() -> Any:
+    # Kept short deliberately: if this one is slow to answer, the answer is not
+    # worth waiting for.
+    return await get_conn(Ph).send("MACHINE_ESTOP", timeout=15.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_machine_trim", "Trim feed, spindle or rapid on the running job"))
+async def physics_machine_trim(
+    feed: Any = None,
+    spindle: Any = None,
+    rapid: int | None = None,
+) -> Any:
+    return await get_conn(Ph).send(
+        "MACHINE_TRIM", compact_dict(feed=feed, spindle=spindle, rapid=rapid), timeout=30.0
+    )
+
 @mcp.tool(description=get_doc(physics_docs, "physics_get_note_cards", "Return note cards"))
 async def physics_get_note_cards() -> Any:
     return await get_conn(Ph).send("GET_NOTE_CARDS")
