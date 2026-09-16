@@ -726,11 +726,14 @@ async def use_session(port: int, session_id: str) -> Any:
     "for the chosen metal's shrinkage. Returns a summary, any warnings, and the list of files "
     "produced — NOT their contents. Pass out_dir to actually get the files: each is written there "
     "and the returned path tells you where. Without out_dir you only learn the names and sizes. "
-    "parting_from_base_mm places the parting line (default: chosen automatically). sprue_dia_mm "
-    "and riser_dia_mm of 0 mean size them from the part."
+    "method is 'sand' (a reusable pattern rammed in green sand, which must draw) or 'lost-pla' (a "
+    "pattern invested in plaster and burnt out, which may have undercuts). parting_from_base_mm "
+    "places the parting line and riser options apply to sand only (default: chosen automatically). "
+    "sprue_dia_mm and riser_dia_mm of 0 mean size them from the part."
 )))
 async def physics_export_cast(
     metal: str = "aluminium",
+    method: str = "sand",
     parting_from_base_mm: float | None = None,
     add_gating: bool = True,
     sprue_dia_mm: float = 0,
@@ -740,6 +743,7 @@ async def physics_export_cast(
 ) -> Any:
     payload = compact_dict(
         metal=metal,
+        method=method,
         partingFromBaseMm=parting_from_base_mm,
         addGating=add_gating,
         sprueDiaMm=sprue_dia_mm,
@@ -1963,9 +1967,128 @@ async def etch_make_test_grid(options: dict | None = None) -> Any:
     # comes back, and a font that has to be fetched makes that a slow call.
     return await get_conn(Et).send("MAKE_TEST_GRID", {"options": options or {}}, timeout=60.0)
 
-@mcp.tool(description=get_doc(etch_docs, "etch_machine_status", "Report the connected machine's state, position and live trim"))
+# ── Etch: the machine ─────────────────────────────────────────────────────────
+#
+# Same command set as Volt's and Mesh's, same arming gate. Trim used to be the
+# only machine command here, and the comment above it said why: a machine begins
+# moving when the person beside it says so. That rule is kept — by the gate in
+# the app, which is what makes the rest of these safe to serve.
+#
+# The one command with no counterpart in the other two is the guide spot. Most
+# machines this app drives are lasers, and putting a visible dot on the material
+# is how a job gets set up: "is that the corner?" is a question an operator can
+# answer, and reading them coordinates is not.
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_status", "Report the machine's state, position and whether it is armed"))
 async def etch_machine_status() -> Any:
     return await get_conn(Et).send("MACHINE_STATUS")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_settings", "The controller's $$ settings, as read on connect"))
+async def etch_machine_settings() -> Any:
+    return await get_conn(Et).send("MACHINE_SETTINGS")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_list_devices", "List the Tekno Boxes paired to this account"))
+async def etch_machine_list_devices() -> Any:
+    return await get_conn(Et).send("MACHINE_LIST_DEVICES", timeout=20.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_arm", "Explains that only the person at the machine can allow Claude to move it"))
+async def etch_machine_arm() -> Any:
+    return await get_conn(Et).send("MACHINE_ARM")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_disarm", "Hand back permission to move the machine, stopping anything running"))
+async def etch_machine_disarm() -> Any:
+    return await get_conn(Et).send("MACHINE_DISARM")
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_connect", "Open the link to the machine over USB or WiFi"))
+async def etch_machine_connect(transport: str | None = None, deviceId: str | None = None) -> Any:
+    return await get_conn(Et).send(
+        "MACHINE_CONNECT", compact_dict(transport=transport, deviceId=deviceId), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_disconnect", "Close the machine link"))
+async def etch_machine_disconnect() -> Any:
+    return await get_conn(Et).send("MACHINE_DISCONNECT", timeout=20.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_jog", "Move the head by a relative distance in mm"))
+async def etch_machine_jog(
+    x: float | None = None,
+    y: float | None = None,
+    z: float | None = None,
+    feedRate: float | None = None,
+) -> Any:
+    return await get_conn(Et).send(
+        "MACHINE_JOG", compact_dict(x=x, y=y, z=z, feedRate=feedRate), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_home", "Run the homing cycle against the limit switches"))
+async def etch_machine_home() -> Any:
+    return await get_conn(Et).send("MACHINE_HOME", timeout=180.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_unlock", "Clear GRBL's alarm lockout"))
+async def etch_machine_unlock() -> Any:
+    return await get_conn(Et).send("MACHINE_UNLOCK", timeout=20.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_goto_origin", "Lift, then travel to the work origin"))
+async def etch_machine_goto_origin(safeZMm: float | None = None) -> Any:
+    return await get_conn(Et).send("MACHINE_GOTO_ORIGIN", compact_dict(safeZMm=safeZMm), timeout=120.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_zero_xy", "Set the current XY position as the work origin"))
+async def etch_machine_zero_xy() -> Any:
+    return await get_conn(Et).send("MACHINE_ZERO_XY", timeout=30.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_zero_z", "Set work Z0 where the tool stands, allowing for a shim"))
+async def etch_machine_zero_z(shimThicknessMm: float | None = None) -> Any:
+    return await get_conn(Et).send(
+        "MACHINE_ZERO_Z", compact_dict(shimThicknessMm=shimThicknessMm), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_guide_spot", "Light the laser at pointer power so the head can be seen"))
+async def etch_machine_guide_spot(on: bool | None = None, power: float | None = None) -> Any:
+    return await get_conn(Et).send(
+        "MACHINE_GUIDE_SPOT", compact_dict(on=on, power=power), timeout=30.0
+    )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_probe_surface", "Probe a grid across the bed, for a CNC job"))
+async def etch_machine_probe_surface(
+    cols: int | None = None,
+    rows: int | None = None,
+    bounds: dict | None = None,
+) -> Any:
+    return await get_conn(Et).send(
+        "MACHINE_PROBE_SURFACE", compact_dict(cols=cols, rows=rows, bounds=bounds), timeout=1800.0
+    )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_frame_job", "Trace the stock outline with the guide beam lit"))
+async def etch_machine_frame_job(
+    safeZMm: float | None = None,
+    guidePower: float | None = None,
+) -> Any:
+    return await get_conn(Et).send(
+        "MACHINE_FRAME_JOB", compact_dict(safeZMm=safeZMm, guidePower=guidePower), timeout=600.0
+    )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_run_job", "Cut the document that is open"))
+async def etch_run_job(options: dict | None = None) -> Any:
+    # Returns once the job is streaming, not once it has finished.
+    return await get_conn(Et).send("RUN_JOB", compact_dict(options=options), timeout=300.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_pause", "Feed hold: stop without losing position"))
+async def etch_machine_pause() -> Any:
+    return await get_conn(Et).send("MACHINE_PAUSE", timeout=30.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_resume", "Pick a paused job back up"))
+async def etch_machine_resume() -> Any:
+    return await get_conn(Et).send("MACHINE_RESUME", timeout=60.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_cancel", "Stop the job and drop the rest of the program"))
+async def etch_machine_cancel() -> Any:
+    return await get_conn(Et).send("MACHINE_CANCEL", timeout=30.0)
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_estop", "Emergency stop: soft-reset the controller and kill the beam"))
+async def etch_machine_estop() -> Any:
+    # Kept short deliberately: if this one is slow to answer, the answer is not
+    # worth waiting for.
+    return await get_conn(Et).send("MACHINE_ESTOP", timeout=15.0)
 
 @mcp.tool(description=get_doc(etch_docs, "etch_machine_trim", "Trim feed, power or rapid speed on the running machine"))
 async def etch_machine_trim(
@@ -1977,12 +2100,8 @@ async def etch_machine_trim(
     # browser end rejects anything else rather than accepting it and doing
     # nothing.
     #
-    # Trim is still the only machine command Etch exposes. That is now a matter
-    # of Etch not having been moved onto the shared machining layer yet, rather
-    # than a rule: the rule it used to state — a machine begins moving when the
-    # person beside it says so — is kept by the arming gate, which is how Volt's
-    # circuit_machine_* tools are safe to expose. Etch gets the same set when it
-    # is migrated.
+    # Ungated, like the other two apps' trim: it changes how hard a job someone
+    # already chose to run is cutting, and cannot start one.
     return await get_conn(Et).send("MACHINE_TRIM", compact_dict(
         feed=feed, power=power, rapid=rapid
     ))
