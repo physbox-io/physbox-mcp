@@ -104,12 +104,29 @@ def _deliver_export(result: Any, out_dir: str | None) -> dict:
         )
     return delivered
 
+# Where an app's own docs live, when the app is checked out beside us. The key
+# is the MCP's app id; the value is the repo directory, which is not always the
+# same word — Mesh's tools are all `physics_*`.
+APP_REPO_DIR = {"physics": "mesh", "circuit": "volt"}
+
 def load_mcp_docs(app_id: str) -> dict:
+    """
+    An app's agent-facing documentation, preferring the app's own copy.
+
+    The bundled copy under `mcp-docs/` is a *fallback* for an installed server
+    with no app checkout, and it is last for that reason. It used to sit second,
+    ahead of the app's own file, which meant a developer editing the app's
+    `mcp-docs.json` — the thing both apps' CLAUDE.md tells them to edit — was
+    editing a file the server then ignored. The two drifted for months and
+    nothing said so, because a tool whose docs are missing falls back to the
+    inline description in `get_doc` and keeps working.
+    """
     current_dir = Path(__file__).parent.resolve()
+    repo = APP_REPO_DIR.get(app_id, app_id)
     possible_paths = [
-        current_dir / ".." / ".." / app_id / "mcp-docs.json",
+        current_dir / ".." / ".." / repo / "mcp-docs.json",
+        Path.home() / repo / "mcp-docs.json",
         current_dir / "mcp-docs" / f"{app_id}.json",
-        Path.home() / app_id / "mcp-docs.json"
     ]
     for path in possible_paths:
         try:
