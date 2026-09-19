@@ -1970,6 +1970,47 @@ async def etch_add_registration(
         count=count, diameterMm=diameterMm, insetMm=insetMm
     ))
 
+@mcp.tool(description=get_doc(etch_docs, "etch_make_living_hinge", "Cut a living hinge — rows of slits that let a flat sheet bend"))
+async def etch_make_living_hinge(
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    axis: str | None = None,
+    slitLengthMm: float | None = None,
+    bridgeMm: float | None = None,
+    pitchMm: float | None = None,
+) -> Any:
+    # The layout rules are the reason this is a tool rather than a few hundred
+    # `etch_add_element` calls: alternate rows must be offset half a period or
+    # the panel does not bend at all, and a slit that reaches the edge of the
+    # region is a split the panel tears along on the first fold.
+    return await get_conn(Et).send("MAKE_LIVING_HINGE", compact_dict(
+        x=x, y=y, width=width, height=height, axis=axis,
+        slitLengthMm=slitLengthMm, bridgeMm=bridgeMm, pitchMm=pitchMm
+    ))
+
+@mcp.tool(description=get_doc(etch_docs, "etch_make_perforation", "Fill a region with holes — a grille, a vent, a diffuser"))
+async def etch_make_perforation(
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    lattice: str | None = None,
+    shape: str | None = None,
+    sizeMm: float | None = None,
+    slotLengthMm: float | None = None,
+    pitchMm: float | None = None,
+    ramp: str | None = None,
+) -> Any:
+    # It reports the web — the material between two neighbouring holes — because
+    # that is the number that decides whether the panel survives being cut, and
+    # it is not visible in any of the settings that produced it.
+    return await get_conn(Et).send("MAKE_PERFORATION", compact_dict(
+        x=x, y=y, width=width, height=height, lattice=lattice, shape=shape,
+        sizeMm=sizeMm, slotLengthMm=slotLengthMm, pitchMm=pitchMm, ramp=ramp
+    ))
+
 @mcp.tool(description=get_doc(etch_docs, "etch_update_layer", "Change one layer's settings in place — operation, holding, depth, overrides"))
 async def etch_update_layer(layerId: str, updates: dict) -> Any:
     # Layer settings were only reachable by sending the whole `layers` array
