@@ -1970,6 +1970,23 @@ async def etch_add_registration(
         count=count, diameterMm=diameterMm, insetMm=insetMm
     ))
 
+@mcp.tool(description=get_doc(etch_docs, "etch_make_ornament", "Draw a decorative pattern — guilloche, maze, animal print or vine scrollwork"))
+async def etch_make_ornament(
+    kind: str,
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    options: dict | None = None,
+) -> Any:
+    # One tool for the four, because they take the same three things: which
+    # one, where, and its own settings. The settings are described by the
+    # generator itself and validated against that list, so a typo comes back
+    # naming the options it does have rather than being quietly ignored.
+    return await get_conn(Et).send("MAKE_ORNAMENT", compact_dict(
+        kind=kind, x=x, y=y, width=width, height=height, options=options
+    ))
+
 @mcp.tool(description=get_doc(etch_docs, "etch_make_living_hinge", "Cut a living hinge — rows of slits that let a flat sheet bend"))
 async def etch_make_living_hinge(
     x: float | None = None,
