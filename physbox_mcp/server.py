@@ -1403,8 +1403,28 @@ async def physics_run_headless(ticks: int = 300, stride: int = 1, bodies: list[s
     return await get_conn(Ph).send("RUN_HEADLESS", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_history", "Return telemetry history"))
-async def physics_get_history() -> Any:
-    return await get_conn(Ph).send("GET_HISTORY")
+async def physics_get_history(
+    since_time: float | None = None,
+    last: int | None = None,
+    stride: int | None = None,
+    max_frames: int | None = None,
+    bodies: list[str] | None = None,
+    include: list[str] | None = None,
+) -> Any:
+    payload: dict[str, Any] = {}
+    if since_time is not None:
+        payload["sinceTime"] = since_time
+    if last is not None:
+        payload["last"] = last
+    if stride is not None:
+        payload["stride"] = stride
+    if max_frames is not None:
+        payload["maxFrames"] = max_frames
+    if bodies:
+        payload["bodies"] = bodies
+    if include:
+        payload["include"] = include
+    return await get_conn(Ph).send("GET_HISTORY", payload)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_telemetry", "Return latest single frame telemetry"))
 async def physics_get_telemetry() -> Any:
@@ -1496,6 +1516,121 @@ async def physics_add_object(body: dict[str, Any]) -> Any:
 @mcp.tool(description=get_doc(physics_docs, "physics_delete_object", "Delete a body from the scene"))
 async def physics_delete_object(id: str) -> Any:
     return await get_conn(Ph).send("DELETE_OBJECT", {"targetId": id}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_set_constraint", "Weld or pin a body, and set what breaks the weld"))
+async def physics_set_constraint(
+    id: str,
+    weld_to: str | None = None,
+    connect_to: str | None = None,
+    break_force_n: float | None = None,
+    break_torque_nm: float | None = None,
+    break_hold_steps: int | None = None,
+    clear_weld: bool = False,
+    clear_connect: bool = False,
+    clear_break: bool = False,
+) -> Any:
+    # Omitted means "leave it alone" and null means "clear it", which one
+    # optional argument cannot say on its own — hence the explicit clear_* flags.
+    payload: dict[str, Any] = {"targetId": id}
+    if clear_weld:
+        payload["weldTo"] = None
+    elif weld_to is not None:
+        payload["weldTo"] = weld_to
+    if clear_connect:
+        payload["connectTo"] = None
+    elif connect_to is not None:
+        payload["connectTo"] = connect_to
+    if clear_break:
+        payload["breakForceN"] = None
+        payload["breakTorqueNm"] = None
+        payload["breakHoldSteps"] = None
+    else:
+        if break_force_n is not None:
+            payload["breakForceN"] = break_force_n
+        if break_torque_nm is not None:
+            payload["breakTorqueNm"] = break_torque_nm
+        if break_hold_steps is not None:
+            payload["breakHoldSteps"] = break_hold_steps
+    return await get_conn(Ph).send("SET_CONSTRAINT", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_set_impact", "What a body does when it is hit hard"))
+async def physics_set_impact(
+    id: str,
+    shatter_impulse_ns: float | None = None,
+    shatter_pieces: int | None = None,
+    shatter_pattern: str | None = None,
+    shatter_spread: float | None = None,
+    shatter_seed: int | None = None,
+    shatter_depth: int | None = None,
+    dent_yield_ns: float | None = None,
+    dent_depth_per_ns: float | None = None,
+    dent_radius: float | None = None,
+    dent_max_depth: float | None = None,
+    pierce_impulse_ns: float | None = None,
+    deform_collision: bool | None = None,
+    geom_name: str | None = None,
+    clear_shatter: bool = False,
+    clear_dent: bool = False,
+) -> Any:
+    payload: dict[str, Any] = {"targetId": id}
+    if clear_shatter:
+        payload["shatterImpulseNs"] = None
+    elif shatter_impulse_ns is not None:
+        payload["shatterImpulseNs"] = shatter_impulse_ns
+    for key, value in (
+        ("shatterPieces", shatter_pieces),
+        ("shatterPattern", shatter_pattern),
+        ("shatterSpread", shatter_spread),
+        ("shatterSeed", shatter_seed),
+        ("shatterDepth", shatter_depth),
+    ):
+        if value is not None:
+            payload[key] = value
+    if clear_dent:
+        payload["dentYieldNs"] = None
+    elif dent_yield_ns is not None:
+        payload["dentYieldNs"] = dent_yield_ns
+    for key, value in (
+        ("dentDepthPerNs", dent_depth_per_ns),
+        ("dentRadius", dent_radius),
+        ("dentMaxDepth", dent_max_depth),
+        ("pierceImpulseNs", pierce_impulse_ns),
+        ("deformCollision", deform_collision),
+        ("geomName", geom_name),
+    ):
+        if value is not None:
+            payload[key] = value
+    return await get_conn(Ph).send("SET_IMPACT", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_set_crumple", "A joint that folds when overloaded and stays folded"))
+async def physics_set_crumple(
+    id: str,
+    joint_name: str | None = None,
+    crumple_torque_nm: float | None = None,
+    crumple_range_deg: list[float] | None = None,
+    crumple_damping_after: float | None = None,
+    clear: bool = False,
+) -> Any:
+    payload: dict[str, Any] = {"targetId": id}
+    if joint_name is not None:
+        payload["jointName"] = joint_name
+    if clear:
+        payload["crumpleTorqueNm"] = None
+    elif crumple_torque_nm is not None:
+        payload["crumpleTorqueNm"] = crumple_torque_nm
+    if crumple_range_deg is not None:
+        payload["crumpleRangeDeg"] = crumple_range_deg
+    if crumple_damping_after is not None:
+        payload["crumpleDampingAfter"] = crumple_damping_after
+    return await get_conn(Ph).send("SET_CRUMPLE", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_get_breaks", "What has sheared off during this run"))
+async def physics_get_breaks() -> Any:
+    return await get_conn(Ph).send("GET_BREAKS", {})
+
+@mcp.tool(description=get_doc(physics_docs, "physics_restore_break", "Put a broken weld back"))
+async def physics_restore_break(key: str | None = None) -> Any:
+    return await get_conn(Ph).send("RESTORE_BREAK", {"key": key} if key else {}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_probe_sculpt", "Find the surface nearest some points"))
 async def physics_probe_sculpt(id: str, at: list[Any]) -> Any:
