@@ -2040,10 +2040,12 @@ async def etch_add_image(
         image=image, options=options, layerId=layerId
     ), timeout=60.0)
 
-@mcp.tool(description=get_doc(etch_docs, "etch_combine", "Union, subtract, intersect or exclude two or more shapes into one path"))
+@mcp.tool(description=get_doc(etch_docs, "etch_combine", "Union, subtract, intersect or exclude two or more shapes into one path; or join/unjoin separate pieces into one part"))
 async def etch_combine(elementIds: list[str], op: str) -> Any:
     # Order is the operation, not a detail: elementIds[0] is the base, and for
     # 'subtract' it is the shape being cut into. Passed through as sent.
+    # 'join' and 'unjoin' ride on the same tool (one id is enough for them) so
+    # the tool count the website advertises does not move for them.
     return await get_conn(Et).send("COMBINE", {"elementIds": elementIds, "op": op})
 
 @mcp.tool(description=get_doc(etch_docs, "etch_fill_region", "Fill the region of the drawing enclosing a point, as a hatched shape"))
