@@ -1640,6 +1640,17 @@ async def physics_probe_sculpt(id: str, at: list[Any]) -> Any:
 async def physics_undo_sculpt(id: str) -> Any:
     return await get_conn(Ph).send("UNDO_SCULPT", {"targetId": id}, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_sculpt_cut", "Cut a hole through a sculpt, or a piece off it"))
+async def physics_sculpt_cut(
+    id: str,
+    polygon: list[list[float]],
+    direction: list[float] | None = None,
+    mode: str | None = None,
+    cap: bool | None = None,
+) -> Any:
+    payload = compact_dict(targetId=id, polygon=polygon, direction=direction, mode=mode, cap=cap)
+    return await get_conn(Ph).send("SCULPT_CUT", payload, timeout=90.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_get_sculpt", "Return a sculpt body's mesh statistics"))
 async def physics_get_sculpt(id: str) -> Any:
     return await get_conn(Ph).send("GET_SCULPT", {"targetId": id})
