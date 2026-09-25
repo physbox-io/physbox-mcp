@@ -1789,6 +1789,21 @@ async def physics_cut(
     )
     return await get_conn(Ph).send("BODY_CUT", payload, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_get_edges", "List a body's edges that can be rounded or bevelled"))
+async def physics_get_edges(id: str) -> Any:
+    return await get_conn(Ph).send("GET_EDGES", {"targetId": id}, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_round_edges", "Round (fillet) or bevel (chamfer) edges of a body"))
+async def physics_round_edges(
+    id: str,
+    edges: Any = "all",
+    sizeMm: float | None = None,
+    mode: str = "round",
+    remove: bool | None = None,
+) -> Any:
+    payload = compact_dict(targetId=id, edges=edges, sizeMm=sizeMm, mode=mode, remove=remove)
+    return await get_conn(Ph).send("ROUND_EDGES", payload, timeout=120.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_dimension", "Set the size or place of part of a lattice shape"))
 async def physics_lattice_dimension(
     id: str,
