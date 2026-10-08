@@ -743,7 +743,7 @@ async def use_session(port: int, session_id: str) -> Any:
     "for the chosen metal's shrinkage. Returns a summary, any warnings, and the list of files "
     "produced — NOT their contents. Pass out_dir to actually get the files: each is written there "
     "and the returned path tells you where. Without out_dir you only learn the names and sizes. "
-    "method is 'sand' (a reusable pattern rammed in green sand, which must draw) or 'lost-pla' (a "
+    "method is 'sand' (a reusable pattern rammed in sand, which must draw) or 'lost-pla' (a "
     "pattern invested in plaster and burnt out, which may have undercuts). parting_from_base_mm "
     "places the parting line and riser options apply to sand only (default: chosen automatically). "
     "sprue_dia_mm and riser_dia_mm of 0 mean size them from the part."
@@ -774,6 +774,36 @@ async def physics_export_cast(
     # slicing pass over a dense mesh will blow straight through the usual 60.
     result = await get_conn(Ph).send("EXPORT_CAST", payload, timeout=180.0)
     return _deliver_export(result, out_dir)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_set_cast_prep", (
+    "Prepare every part in the Mesh scene for casting, in the model itself: chamfer outside edges, "
+    "fillet inside corners and, for method 'sand', bake draft into every part. Calling it again "
+    "re-applies from the originals. off=True restores the original shapes; bake=True keeps the "
+    "prepared ones. While draft is on, edits to bodies are refused."
+)))
+async def physics_set_cast_prep(
+    method: str = "sand",
+    draft_deg: float = 2,
+    draft_mode: str = "add",
+    edges: bool = True,
+    edge_size_mm: float | None = None,
+    parting_from_base_mm: float | None = None,
+    off: bool = False,
+    bake: bool = False,
+) -> Any:
+    payload = compact_dict(
+        method=method,
+        draftDeg=draft_deg,
+        draftMode=draft_mode,
+        edges=edges,
+        edgeSizeMm=edge_size_mm,
+        partingFromBaseMm=parting_from_base_mm,
+        off=off or None,
+        bake=bake or None,
+    )
+    # Finding every part's edges and compiling its roundings goes through the
+    # OpenSCAD workers one body at a time, so a busy scene takes a while.
+    return await get_conn(Ph).send("SET_CAST_PREP", payload, timeout=180.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_export_machining", (
     "Export the current Mesh scene as a CNC machining program (G-code and setup sheets) for the "
