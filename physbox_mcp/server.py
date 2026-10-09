@@ -805,6 +805,42 @@ async def physics_set_cast_prep(
     # OpenSCAD workers one body at a time, so a busy scene takes a while.
     return await get_conn(Ph).send("SET_CAST_PREP", payload, timeout=180.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_split_for_print", (
+    "Cut a Mesh body into sections that fit the 3D printer's bed, each turned to need the least "
+    "support, with dowel holes, printed pegs or plain faces on the cuts. Reports the sections and "
+    "exact checks; test_assembly=True also reassembles them in MuJoCo and reports how each joint "
+    "seats; apply=True replaces the body with its sections (one undo step)."
+)))
+async def physics_split_for_print(
+    body_id: str | None = None,
+    with_ids: list[str] | None = None,
+    bed_mm: list[float] | None = None,
+    joinery: str = "dowel",
+    diameter_mm: float | None = None,
+    length_mm: float | None = None,
+    clearance_mm: float | None = None,
+    min_wall_mm: float | None = None,
+    margin_mm: float | None = None,
+    test_assembly: bool = False,
+    apply: bool = False,
+) -> Any:
+    payload = compact_dict(
+        bodyId=body_id,
+        withIds=with_ids,
+        bedMm=bed_mm,
+        joinery=joinery,
+        diameterMm=diameter_mm,
+        lengthMm=length_mm,
+        clearanceMm=clearance_mm,
+        minWallMm=min_wall_mm,
+        marginMm=margin_mm,
+        testAssembly=test_assembly or None,
+        apply=apply or None,
+    )
+    # The search builds hundreds of solids for a big part, and an assembly test
+    # is a MuJoCo run per joint; both are worker jobs measured in seconds.
+    return await get_conn(Ph).send("SPLIT_FOR_PRINT", payload, timeout=300.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_export_machining", (
     "Export the current Mesh scene as a CNC machining program (G-code and setup sheets) for the "
     "given number of setups. Returns a summary, any warnings, and the list of files produced — "
@@ -1370,6 +1406,8 @@ async def physics_set_environment(
     windY: float | None = None,
     density: float | None = None,
     floorFriction: float | None = None,
+    floorBounce: float | None = None,
+    fidelity: str | None = None,
 ) -> Any:
     payload = compact_dict(
         gravityZ=gravityZ,
@@ -1377,6 +1415,8 @@ async def physics_set_environment(
         windY=windY,
         density=density,
         floorFriction=floorFriction,
+        floorBounce=floorBounce,
+        fidelity=fidelity,
     )
     return await get_conn(Ph).send("SET_ENVIRONMENT", payload)
 
