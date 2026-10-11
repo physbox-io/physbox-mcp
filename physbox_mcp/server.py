@@ -1602,8 +1602,9 @@ async def physics_create_sculpt(
     name: str | None = None,
     base: str = "sphere",
     pos: list[float] | None = None,
+    parent: str | None = None,
 ) -> Any:
-    payload = compact_dict(name=name, base=base, pos=pos)
+    payload = compact_dict(name=name, base=base, pos=pos, parent=parent)
     return await get_conn(Ph).send("CREATE_SCULPT", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_set_sculpt_base", "Replace a sculpt's base shape"))
@@ -1638,11 +1639,11 @@ async def physics_sculpt(
     return await get_conn(Ph).send("SCULPT", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_add_object", "Add one body to the scene"))
-async def physics_add_object(body: dict[str, Any]) -> Any:
+async def physics_add_object(body: dict[str, Any], parent: str | None = None) -> Any:
     # ADD_OBJECT compiles any scad or boolean the body carries before it
     # answers, the same as build_scene does, so it gets build_scene's timeout
     # rather than the default ten seconds.
-    return await get_conn(Ph).send("ADD_OBJECT", {"body": body}, timeout=60.0)
+    return await get_conn(Ph).send("ADD_OBJECT", compact_dict(body=body, parent=parent), timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_delete_object", "Delete a body from the scene"))
 async def physics_delete_object(id: str) -> Any:
@@ -1799,8 +1800,9 @@ async def physics_create_lattice(
     pos: list[float] | None = None,
     sizeMm: float = 40.0,
     edit: bool = False,
+    parent: str | None = None,
 ) -> Any:
-    payload = compact_dict(name=name, pos=pos, sizeMm=sizeMm, edit=edit)
+    payload = compact_dict(name=name, pos=pos, sizeMm=sizeMm, edit=edit, parent=parent)
     return await get_conn(Ph).send("CREATE_LATTICE", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_lattice", "Read a lattice body's faces back"))
