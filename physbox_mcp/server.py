@@ -28,6 +28,12 @@ from . import cloud
 
 MCP_PORT = int(os.environ.get("MCP_PORT", "3141"))
 MCP_WS_PORT = int(os.environ.get("MCP_WS_PORT", "3142"))
+# The largest message the hub will take in, which is the hub's own websockets
+# limit on inbound frames. Only inbound is capped: the hub can *send* a tab more,
+# and a browser takes whatever it is sent. So it binds on a tab's reply, and on a
+# command a secondary peer forwards to the primary — physics_load_scene_file's
+# scene, sent from a peer, is the one that gets near it.
+WS_MAX_MESSAGE = 32 * 1024 * 1024
 
 APPS = {
     "process": {"port": 5173, "name": "Flux"},
@@ -45,6 +51,12 @@ Et = APPS["etch"]["port"]
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
+
+def _wire(data: Any) -> str:
+    """JSON for the socket. Compact, because a command can carry a whole scene
+    and the default separators add a space after every comma and colon — 2 MB
+    on a 17 MB scene, enough to matter against WS_MAX_MESSAGE."""
+    return json.dumps(data, separators=(",", ":"))
 
 def compact_dict(**kwargs) -> dict:
     """Return a dictionary containing only non-None values."""
@@ -309,7 +321,7 @@ class AppConnection:
             data = {**(payload or {}), "cmd": cmd, "id": msg_id}
 
             # One socket, not a broadcast — see the note on `sessions`.
-            asyncio.run_coroutine_threadsafe(entry["ws"].send(json.dumps(data)), entry["ws_loop"])
+            asyncio.run_coroutine_threadsafe(entry["ws"].send(_wire(data)), entry["ws_loop"])
 
             try:
                 return await asyncio.wait_for(fut, timeout=timeout)
@@ -334,7 +346,7 @@ class AppConnection:
                 "cmd": cmd,
                 "payload": payload,
             }
-            asyncio.run_coroutine_threadsafe(peer_ws.send(json.dumps(forward_data)), peer_ws_loop)
+            asyncio.run_coroutine_threadsafe(peer_ws.send(_wire(forward_data)), peer_ws_loop)
             
             try:
                 return await asyncio.wait_for(fut, timeout=timeout)
@@ -511,7 +523,7 @@ async def ws_handler(ws):
                     entry = target_conn.sessions[target_session]
                     peer_pending_requests[req_id] = (ws, req_id)
                     cmd_data = {**(payload or {}), "cmd": cmd, "id": req_id}  # envelope wins; see AppConnection.send
-                    asyncio.run_coroutine_threadsafe(entry["ws"].send(json.dumps(cmd_data)), entry["ws_loop"])
+                    asyncio.run_coroutine_threadsafe(entry["ws"].send(_wire(cmd_data)), entry["ws_loop"])
 
             elif event in ("RESULT", "ERROR"):
                 msg_id = msg.get("id", "")
@@ -571,7 +583,7 @@ async def run_peer_client_loop():
     global peer_ws, peer_ws_loop
     peer_ws_url = f"ws://localhost:{MCP_WS_PORT}"
     try:
-        async with websockets.connect(peer_ws_url, max_size=32 * 1024 * 1024) as ws:
+        async with websockets.connect(peer_ws_url, max_size=WS_MAX_MESSAGE) as ws:
             peer_ws = ws
             peer_ws_loop = asyncio.get_running_loop()
             peer_id = "".join(random.choices(string.ascii_letters, k=8))
@@ -634,7 +646,7 @@ def start_ws_bridge():
                 # on the network and the agent's side of that gate. Both are
                 # needed — the gate answers "may this agent move the machine",
                 # not "whose agent is this".
-                async with websockets.serve(ws_handler, "127.0.0.1", MCP_WS_PORT, max_size=32 * 1024 * 1024):
+                async with websockets.serve(ws_handler, "127.0.0.1", MCP_WS_PORT, max_size=WS_MAX_MESSAGE):
                     is_primary = True
                     print(f"MCP Primary WebSocket Hub listening on ws://localhost:{MCP_WS_PORT}", file=sys.stderr)
                     await asyncio.Future()
@@ -1423,6 +1435,45 @@ async def physics_set_environment(
 @mcp.tool(description=get_doc(physics_docs, "physics_update_scene", "Replace scene graph"))
 async def physics_update_scene(sceneGraph: list[Any]) -> Any:
     return await get_conn(Ph).send("UPDATE_SCENE", {"sceneGraph": sceneGraph}, timeout=60.0)
+
+def _local_path(path: str) -> Path:
+    """The path as given, on whatever OS the server runs. One fallback, only for a
+    path that does not exist as given: a Windows drive path (`C:\\Users\\...`)
+    handed to a server running in WSL, which sees that drive at /mnt/c."""
+    p = path.strip().strip('"')
+    given = Path(p).expanduser()
+    if given.exists():
+        return given
+    if len(p) > 2 and p[1] == ":" and p[2] in "\\/" and p[0].isalpha():
+        mount = Path("/mnt") / p[0].lower()
+        if mount.is_dir():
+            return mount.joinpath(*[part for part in p[3:].replace("\\", "/").split("/") if part])
+    return given
+
+@mcp.tool(description=get_doc(physics_docs, "physics_load_scene_file", "Load a Mesh scene JSON file from disk"))
+async def physics_load_scene_file(path: str) -> Any:
+    file = _local_path(path)
+    if not file.is_file():
+        raise RuntimeError(f"No file at {file}" + (f" (from {path})" if str(file) != path else ""))
+    try:
+        scene = json.loads(file.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise RuntimeError(f"{file.name} is not valid JSON: {e}")
+    if not isinstance(scene, dict) or not isinstance(scene.get("nodes"), list):
+        raise RuntimeError(f'{file.name} is not a Mesh scene: it has no "nodes" array. Use a file from Export JSON.')
+    size = len(_wire({"scene": scene}))
+    # The primary sends a tab anything; a peer's forward is an inbound message on
+    # the primary, and past its limit the primary drops it with the connection.
+    if not is_primary and size > WS_MAX_MESSAGE - 64 * 1024:
+        raise RuntimeError(
+            f"{file.name} is {size / 1e6:.1f} MB as a command, over the hub's {WS_MAX_MESSAGE // (1024 * 1024)} MB "
+            "limit for commands relayed from a secondary MCP session. Load it from the session that owns the hub "
+            "(the first one started), or use Import JSON in the app."
+        )
+    result = await get_conn(Ph).send("LOAD_SCENE_FILE", {"scene": scene}, timeout=180.0)
+    if isinstance(result, dict):
+        result = {**result, "file": str(file), "megabytes": round(size / 1e6, 2)}
+    return result
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_camera",
     "Return the 3D viewport camera's current position and look-at target, in MuJoCo world space. "
