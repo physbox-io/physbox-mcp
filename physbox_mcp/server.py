@@ -330,7 +330,11 @@ class AppConnection:
                 self.pending_session.pop(msg_id, None)
                 raise RuntimeError(f'Timeout waiting for "{cmd}" response ({timeout}s)')
         else:
-            if not self.connected or peer_ws is None or peer_ws_loop is None:
+            # Only the hub link is checked here. Whether a tab is open is the
+            # primary's to say — it answers a forward for a missing tab with a
+            # proper error — and a cached flag that missed one broadcast must
+            # not be able to block commands to a tab that is really there.
+            if peer_ws is None or peer_ws_loop is None:
                 raise RuntimeError(
                     f"App on port {self.port} is not connected or Primary MCP Hub is unavailable. Open the app in your browser!"
                 )
@@ -603,9 +607,13 @@ async def run_peer_client_loop():
                         get_conn(int(p_str)).connected = bool(conn_state)
                 
                 elif event == "APP_STATUS":
+                    # Every port, not only ones this peer has already touched. A
+                    # tab that connected after this peer joined arrives here for a
+                    # port the join snapshot never listed, and dropping it left the
+                    # peer refusing every command to a tab the primary could reach.
                     port = msg.get("port")
-                    if port in _connections:
-                        _connections[port].connected = bool(msg.get("connected"))
+                    if isinstance(port, int):
+                        get_conn(port).connected = bool(msg.get("connected"))
                 
                 elif event == "PEER_RESULT":
                     msg_id = msg.get("id")
