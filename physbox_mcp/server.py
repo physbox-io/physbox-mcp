@@ -887,6 +887,42 @@ async def physics_export_machining(
     result = await get_conn(Ph).send("EXPORT_MACHINING", payload, timeout=180.0)
     return _deliver_export(result, out_dir)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_export_relief", (
+    "Plan a relief carve of the current Mesh scene as the Relief Carve dialog would, and report "
+    "the roughing/finishing split, the estimate and the tool-change line. Uses the dialog's last "
+    "settings unless told otherwise. Pass out_dir to get relief-carve.nc written there."
+)))
+async def physics_export_relief(
+    roughing_tool_dia_mm: float | None = None,
+    finishing_tool_dia_mm: float | None = None,
+    finishing_tool_type: str | None = None,
+    carve_depth_mm: float | None = None,
+    material: str | None = None,
+    roughing_strategy: str | None = None,
+    roughing_enabled: bool | None = None,
+    stock_width_mm: float | None = None,
+    stock_depth_mm: float | None = None,
+    stock_thickness_mm: float | None = None,
+    out_dir: str | None = None,
+) -> Any:
+    payload = compact_dict(
+        roughingToolDiaMm=roughing_tool_dia_mm,
+        finishingToolDiaMm=finishing_tool_dia_mm,
+        finishingToolType=finishing_tool_type,
+        carveDepthMm=carve_depth_mm,
+        material=material,
+        roughingStrategy=roughing_strategy,
+        roughingEnabled=roughing_enabled,
+        stockWidthMm=stock_width_mm,
+        stockDepthMm=stock_depth_mm,
+        stockThicknessMm=stock_thickness_mm,
+        includeFiles=out_dir is not None,
+    )
+    # Planning samples the model and machines the whole surface twice over on
+    # the tab's export worker; a big relief at a fine stepover takes a while.
+    result = await get_conn(Ph).send("EXPORT_RELIEF", payload, timeout=300.0)
+    return _deliver_export(result, out_dir)
+
 # ── PhysBox: Flux (Process) Tools ──────────────────────────────────────────────
 
 @mcp.tool(description=get_doc(process_docs, "process_get_state", "Return PhysBox: Flux state"))
