@@ -873,6 +873,7 @@ async def physics_export_machining(
     stock_thickness_mm: float = 0,
     tool_dia_mm: float = 3.0,
     material: str = "aluminium",
+    finishing_tool_type: str = "flat",
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -880,6 +881,7 @@ async def physics_export_machining(
         stockThicknessMm=stock_thickness_mm,
         toolDiaMm=tool_dia_mm,
         material=material,
+        finishingToolType=finishing_tool_type,
         includeFiles=out_dir is not None,
     )
     result = await get_conn(Ph).send("EXPORT_MACHINING", payload, timeout=180.0)
