@@ -874,10 +874,12 @@ async def physics_export_machining(
     tool_dia_mm: float = 3.0,
     material: str = "aluminium",
     finishing_tool_type: str = "flat",
+    scale_percent: float | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
         sides=sides,
+        scalePercent=scale_percent,
         stockThicknessMm=stock_thickness_mm,
         toolDiaMm=tool_dia_mm,
         material=material,
@@ -943,9 +945,11 @@ async def physics_add_simulation(
     material_thickness_mm: float | None = None,
     machine: str | None = None,
     bit_dia_mm: float | None = None,
+    scale_percent: float | None = None,
 ) -> Any:
     payload = compact_dict(
         kind=kind,
+        scalePercent=scale_percent,
         placement=placement,
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
