@@ -923,6 +923,47 @@ async def physics_export_relief(
     result = await get_conn(Ph).send("EXPORT_RELIEF", payload, timeout=300.0)
     return _deliver_export(result, out_dir)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_add_simulation", (
+    "Cut a relief, machining, laser or contour job back out of its stock and add the result to "
+    "the Mesh scene as a body, beside the model or laid over it. Returns its name and volumes."
+)))
+async def physics_add_simulation(
+    kind: str,
+    placement: str = "beside",
+    roughing_tool_dia_mm: float | None = None,
+    finishing_tool_dia_mm: float | None = None,
+    finishing_tool_type: str | None = None,
+    carve_depth_mm: float | None = None,
+    material: str | None = None,
+    stock_width_mm: float | None = None,
+    stock_depth_mm: float | None = None,
+    stock_thickness_mm: float | None = None,
+    sides: int | None = None,
+    tool_dia_mm: float | None = None,
+    material_thickness_mm: float | None = None,
+    machine: str | None = None,
+    bit_dia_mm: float | None = None,
+) -> Any:
+    payload = compact_dict(
+        kind=kind,
+        placement=placement,
+        roughingToolDiaMm=roughing_tool_dia_mm,
+        finishingToolDiaMm=finishing_tool_dia_mm,
+        finishingToolType=finishing_tool_type,
+        carveDepthMm=carve_depth_mm,
+        material=material,
+        stockWidthMm=stock_width_mm,
+        stockDepthMm=stock_depth_mm,
+        stockThicknessMm=stock_thickness_mm,
+        sides=sides,
+        toolDiaMm=tool_dia_mm,
+        materialThicknessMm=material_thickness_mm,
+        machine=machine,
+        bitDiaMm=bit_dia_mm,
+    )
+    # Plans the job, then cuts it out of the stock on the tab's export worker.
+    return await get_conn(Ph).send("ADD_SIMULATION", payload, timeout=300.0)
+
 # ── PhysBox: Flux (Process) Tools ──────────────────────────────────────────────
 
 @mcp.tool(description=get_doc(process_docs, "process_get_state", "Return PhysBox: Flux state"))
