@@ -1575,16 +1575,18 @@ async def physics_get_camera() -> Any:
 
 @mcp.tool(description=get_doc(physics_docs, "physics_set_camera",
     "Point the 3D viewport camera at an explicit position/target (both MuJoCo world-space [x,y,z], "
-    "same convention as every other pos field), or pass preset='perspective'|'topDown' to reset to "
-    "a built-in view. Use this instead of rotating a body to try to line it up with a fixed camera — "
-    "the default 'perspective' view is a diagonal 3/4 pose, not aligned to any single world axis, so "
-    "no combination of body pos/euler will make it look 'front-on' to the camera."))
+    "same convention as every other pos field), or pass preset='perspective'|'topDown'|'front'|'side' "
+    "to reset to a built-in view; the last three are orthographic drawing views. dims=true|false "
+    "switches the Dims overlay, which marks a drawing view in mm. Use this instead of rotating a body "
+    "to try to line it up with a fixed camera — the default 'perspective' view is a diagonal 3/4 pose, "
+    "not aligned to any single world axis."))
 async def physics_set_camera(
     position: list[float] | None = None,
     target: list[float] | None = None,
     preset: str | None = None,
+    dims: bool | None = None,
 ) -> Any:
-    payload = compact_dict(preset=preset, position=position, target=target)
+    payload = compact_dict(preset=preset, position=position, target=target, dims=dims)
     return await get_conn(Ph).send("SET_CAMERA", payload)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_screenshot", "Capture current rendered frame of 3D viewport as a PNG image."))
