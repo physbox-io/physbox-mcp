@@ -1701,6 +1701,18 @@ async def physics_apply_pattern(
     # at fine detail, or a curved one being unwrapped, takes some seconds.
     return await get_conn(Ph).send("APPLY_PATTERN", payload, timeout=120.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_knife", "Divide a part with a plane: a seam on its faces, or cut through"))
+async def physics_knife(
+    id: str,
+    at: list[float],
+    normal: list[float] | None = None,
+    cut: bool = False,
+    remove: bool = False,
+) -> Any:
+    payload = compact_dict(targetId=id, at=at, normal=normal, cut=cut or None, remove=remove or None)
+    # A cut runs in the app's print-split worker and re-lays the pieces' patterns.
+    return await get_conn(Ph).send("KNIFE", payload, timeout=120.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_clear_paint", "Remove brushed paint"))
 async def physics_clear_paint(id: str | None = None, geomName: str | None = None) -> Any:
     return await get_conn(Ph).send("CLEAR_PAINT", {"targetId": id, "geomName": geomName})
