@@ -1674,6 +1674,33 @@ async def physics_paint(
         timeout=60.0,
     )
 
+@mcp.tool(description=get_doc(physics_docs, "physics_apply_pattern", "Lay a surface pattern on one face of a part"))
+async def physics_apply_pattern(
+    id: str,
+    at: list[float],
+    normal: list[float] | None = None,
+    pattern: str | None = None,
+    options: dict[str, Any] | None = None,
+    depthMm: float | None = None,
+    emboss: bool | None = None,
+    borderMm: float | None = None,
+    cellMm: float | None = None,
+    projection: str | None = None,
+    twistDeg: float | None = None,
+    scale: float | None = None,
+    stopAtDeg: float | None = None,
+    remove: bool = False,
+    preview: bool = False,
+) -> Any:
+    payload = compact_dict(
+        targetId=id, at=at, normal=normal, pattern=pattern, options=options,
+        depthMm=depthMm, emboss=emboss, borderMm=borderMm, cellMm=cellMm, projection=projection,
+        twistDeg=twistDeg, scale=scale, stopAtDeg=stopAtDeg, remove=remove or None, preview=preview or None,
+    )
+    # The textured surface is built in the app's texture worker: a big face
+    # at fine detail, or a curved one being unwrapped, takes some seconds.
+    return await get_conn(Ph).send("APPLY_PATTERN", payload, timeout=120.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_clear_paint", "Remove brushed paint"))
 async def physics_clear_paint(id: str | None = None, geomName: str | None = None) -> Any:
     return await get_conn(Ph).send("CLEAR_PAINT", {"targetId": id, "geomName": geomName})
