@@ -155,6 +155,18 @@
     "use_session": "Send every later command for an app to one particular browser tab. port is the app's port (5175 for Mesh) and session_id comes from list_sessions. Selecting a tab that has gone away is refused, and the error lists the ids that do exist."
   },
   "schema": {
+    "choosingTheRightTool": {
+      "ruleOfThumb": "Build detailed scenes in ONE call to physics_build_scene (or add parts with physics_add_object) using declarative body features instead of making 20 sequential tool calls or hand-writing raw triangle arrays.",
+      "mechanicalPartsWithHolesThreadsRounding": "Use primitive geoms + declarative `cuts: [...]`, `roundEdges: [...]`, `patterns: [...]`, and `paint: [...]` directly on the body descriptor in physics_build_scene / physics_add_object / physics_update_object, OR boolean geoms (`csg: 'difference' | 'intersection'`).",
+      "extruded2DProfilesWithHoles": "Use `type: 'extrude'` (or `'prism'`) with `polygon: [[x,y], ...]` (metres), optional `holes: [[[x,y], ...]]`, and `height` (metres) on a geom or body.",
+      "turnedOrAxisymmetricParts": "Use `type: 'lathe'` (or `'revolve'`) with `profile: [[r,z], ...]` (metres) on a geom or body, OR a declarative lattice `{ lattice: { empty: true, subdiv: 1, ops: [{ op: 'revolve', profile: [[xMm,0,zMm], ...] }] } }`.",
+      "conesWedgesToriTubes": "Use parametric geom types directly: `cone` (`size: [r, hh]`), `pyramid` (`size: [hx, hy, hh]`), `wedge` (`size: [hx, hy, hz]`), `torus` (`size: [R, r]`), `tube` / `pipe` (`size: [outerR, innerR, hh]`).",
+      "subdivisionAndGridPolyhedra": "Use declarative `lattice: { sizeMm: 40, subdiv: 1, thicknessMm: 0, ops: [{ op: 'extrude' | 'inset' | 'bevel' | 'bevel_edges' | 'circle' | 'revolve' | 'bridge' | 'faces' | 'delete_faces' | 'sharpen' | 'dimension' | 'orient' | 'smooth' | 'wall', ... }] }` on the body, or pass `ops: [...]` to `physics_create_lattice`.",
+      "organicClayShapes": "Use declarative `sculpt: { base: 'sphere' | 'head' | ..., strokes: [...], cuts: [...] }` on the body, or pass batch `strokes: [...]` to `physics_sculpt`.",
+      "curvedTracksAndRamps": "Set `isCurve: true` and `curvePoints: [[x,y,z], ...]` (Z-up metres) on the body.",
+      "ropesCablesChains": "Set `isComposite: true`, `compositeType: 'cable'`, `compositeCount`, `compositeSize` on the body.",
+      "customPolyhedra": "If you must supply raw triangles (`type: 'mesh'`), pass `verticesZUp: [x0,y0,z0, ...]` in standard MuJoCo Z-up metres (auto-converted to Y-up `vertices` and `renderVertices`, with inside-out closed meshes auto-flipped). Avoid hand-typing hundreds of coordinates when `extrude`, `lathe`, `lattice`, or `scad` can express the shape in 5 lines."
+    },
     "geomTypes": [
       "box",
       "sphere",
@@ -162,6 +174,13 @@
       "cylinder",
       "ellipsoid",
       "plane",
+      "cone",
+      "pyramid",
+      "wedge",
+      "torus",
+      "tube",
+      "extrude",
+      "lathe",
       "mesh"
     ],
     "geomSizes": {
@@ -171,7 +190,14 @@
       "cylinder": "[radius, half-height]: flat-ended cylinder",
       "ellipsoid": "semi-axes [rx, ry, rz]: a sphere stretched independently on each axis",
       "plane": "ignored. MuJoCo treats it as an infinite ground plane",
-      "mesh": "not used; shape defined by vertices+faces. Collides like any other geom regardless of the `dynamic` field: MuJoCo takes its convex hull for collision whether or not dynamic is set. `dynamic` only controls whether the on-screen mesh re-reads the body's position every frame; see geomFields.dynamic."
+      "cone": "[radius, halfHeight] (or `radius` and `height` fields in metres) — closed outward-wound cone mesh",
+      "pyramid": "[hx, hy, halfHeight] (or `width`, `depth`, `height` in metres) — 4-sided pyramid mesh",
+      "wedge": "[hx, hy, hz] (or `width`, `depth`, `height` in metres) — right-triangular prism / ramp mesh",
+      "torus": "[majorRadius, tubeRadius] (or `majorRadius`, `tubeRadius` in metres) — watertight torus ring in XY plane around Z axis",
+      "tube": "[outerRadius, innerRadius, halfHeight] (or `outerRadius`, `innerRadius`, `height` in metres; alias `pipe` / `hollow_cylinder`) — hollow cylinder / pipe mesh",
+      "extrude": "2D polygon prism (alias `prism`): provide `polygon: [[x,y], ...]` in metres, optional `holes: [[[x,y], ...]]`, and `height` in metres (or `size: [halfHeight]`). Centered on Z by default (`centered: false` spans z=0..height).",
+      "lathe": "revolved 2D profile around Z axis (alias `revolve`): provide `profile: [[r,z], ...]` in metres and optional `segments` (default 24).",
+      "mesh": "arbitrary triangle mesh via `verticesZUp` (preferred, Z-up metres) or `vertices` (Three.js Y-up metres) + `faces`. Defaults to `dynamic: true` so body `pos`/`euler`/`quat` and geom `pos`/`euler`/`quat` always position the mesh in Z-up space."
     },
     "jointTypes": {
       "free": "6-DOF unconstrained; body falls freely under gravity. Use for dropped objects.",
@@ -181,10 +207,10 @@
     },
     "geomFields": {
       "name": "string: unique identifier (required)",
-      "type": "GeomType (required)",
+      "type": "GeomType (required — includes parametric mesh shorthands cone, pyramid, wedge, torus, tube, extrude, lathe)",
       "size": "number[]: see geomSizes",
       "rgba": "[r,g,b,a] each 0-1: color and opacity",
-      "pos": "[x,y,z]: local offset from body origin in MuJoCo Z-up space. NOT world-space: a body at world pos [0,0,0.4] with a box geom of size [0.4,0.4,0.4] spans local z from -0.4 to +0.4 (world 0 to 0.8), not local 0 to 0.8. To place decoration (eyes, labels, etc) on a face, keep the in-face axes within ±half-extent of that axis and set the face-normal axis to ~+half-extent or ~-half-extent. Never use world-height-style values.",
+      "pos": "[x,y,z]: local offset from body origin in MuJoCo Z-up space. Works on all geoms including dynamic meshes.",
       "quat": "[w,x,y,z]: local rotation quaternion",
       "euler": "[roll,pitch,yaw] degrees: local rotation, alternative to quat",
       "fromto": "[x1,y1,z1, x2,y2,z2]: capsule/cylinder endpoints in local space, overrides size/pos/quat",
@@ -196,13 +222,17 @@
       "condim": "1|3|4|6: contact dimensionality",
       "solref": "[timeconst_s, dampingRatio]: contact spring parameters. timeconst_s: spring time constant in seconds, must be >= 5x timestep (0.005s minimum). Lower = stiffer contact. dampingRatio: 1.0 = critically damped (no bounce), 0.0 = underdamped (max bounce), ~0.2 = lively bouncing. Contact between two geoms averages both dampingRatios: set floor to 0.0 and ball to 0.2 to get 0.1 effective ratio. Default (no solref set): [0.02, 1.0] = stiff, no bounce.",
       "solimp": "[d0, d1, width, midpoint, power]: contact impedance. d0: min impedance (0.8-0.99), d1: max impedance (0.99-0.9999), width: transition width, midpoint: where transition is centered, power: curve shape. Higher d0/d1 = harder contact, less penetration. Typical bouncy: [0.99, 0.9999, 0.0001, 0.5, 2].",
-      "vertices": "number[]: mesh only: flat [x0,y0,z0,...] in Three.js Y-up space (X=right, Y=up, Z=toward camera)",
-      "faces": "number[]: mesh only: flat triangle indices [i0,j0,k0,...] with outward-facing (CCW) winding",
-      "dynamic": "boolean: a RENDER-path flag, not a physics one. Collision (convex hull) happens for any mesh geom with vertices+faces regardless of this field. With dynamic:true, the on-screen mesh re-reads the body's xpos/xmat every frame, which any body that moves needs. Without it, the mesh renders once from `vertices` baked into world space and never updates, so a jointed body can simulate correctly while looking frozen on screen. It also ignores the body's own `pos` and `quat` when drawing: a static mesh on a body at pos [0.1,0,0] whose vertices are centred on the origin is drawn AT THE ORIGIN, while the body, its collision and any primitive geoms on it are at x=0.1. If you build a mesh in body-local coordinates and place it with the body's pos (the natural way to put two meshes side by side), set dynamic:true. Any body with a joint gets dynamic:true defaulted onto its mesh geoms when omitted, so set it explicitly only to be clear about intent.",
-      "renderVertices": "number[]: dynamic mesh only: flat [x0,y0,z0,...] in raw MuJoCo Z-up space. Convert from Y-up: (x,y,z)→(x,-z,y). Do NOT subtract centroid; MuJoCo recenters internally and xpos tracks the result. Auto-derived from `vertices` via that same conversion whenever dynamic is true and renderVertices is not supplied.",
+      "verticesZUp": "number[]: PREFERRED for custom meshes: flat [x0,y0,z0, ...] in standard MuJoCo Z-up metres. Automatically populates Three.js Y-up `vertices` and `renderVertices`, and auto-flips closed meshes if wound inside-out.",
+      "vertices": "number[]: mesh only: flat [x0,y0,z0,...] in Three.js Y-up space (X=right, Y=up, Z=toward camera). Optional if `verticesZUp` or `renderVertices` is supplied.",
+      "faces": "number[]: mesh only: flat triangle indices [i0,j0,k0,...] with outward-facing (CCW) winding. Closed meshes with uniformly negative signed volume are automatically flipped right-side out.",
+      "polygon": "number[][]: for `type: 'extrude'`: 2D `[x, y]` vertices in metres",
+      "holes": "number[][][]: for `type: 'extrude'`: optional array of 2D `[x, y]` hole loops in metres",
+      "profile": "number[][]: for `type: 'lathe'`: 2D `[r, z]` profile points in metres revolved around Z",
+      "dynamic": "boolean: defaults to `true` on all `type: 'mesh'` geoms so body `pos`/`euler`/`quat` and local `geom.pos`/`euler`/`quat` always position the mesh in Z-up space.",
+      "renderVertices": "number[]: dynamic mesh only: flat [x0,y0,z0,...] in raw MuJoCo Z-up space. Auto-derived from `verticesZUp` or `vertices` if omitted.",
       "margin": "number: expand contact surface outward by this amount (meters). Useful to prevent sinking.",
       "gap": "number: dead zone inside margin where no contact force is applied.",
-      "paint": "{res, idx, rgba}: brushed vertex colour laid down by physics_paint, stored sparsely and quantised to bytes. Write it with physics_paint rather than by hand. physics_get_scene returns it verbatim, so it round-trips through physics_update_scene and the app's JSON save/load. Decorative only.",
+      "paint": "{res, idx, rgba}: brushed vertex colour laid down by physics_paint or declarative `paint` on the body.",
       "dentYieldNs": "number — newton-seconds above which this MESH surface takes a permanent crater. Cosmetic: contact keeps using the undented shape. Transient.",
       "dentDepthPerNs": "number — metres of depth per newton-second over the yield.",
       "dentRadius": "number — crater radius in metres.",
@@ -213,11 +243,18 @@
     "nodeFields": {
       "id": "string: unique body identifier",
       "name": "string: display name and MuJoCo XML name",
-      "type": "always 'body'",
+      "type": "always 'body' (or shorthand geom type when `geoms` is omitted)",
       "pos": "[x,y,z]: position relative to parent (or world for root)",
       "quat": "[w,x,y,z]: body orientation",
       "euler": "[roll,pitch,yaw] degrees: body orientation, alternative to quat",
-      "geoms": "SceneGeom[]: one or more geoms defining shape",
+      "static": "boolean: if true (or `fixed: true` / `dynamic: false`), omits the default free joint so a top-level body is fixed in world space",
+      "geoms": "SceneGeom[]: one or more geoms defining shape (optional if body-level `type`/`size` shorthand, `lattice`, `sculpt`, `isCurve`, or `scad` is used)",
+      "cuts": "DeclarativeCut[]: array of hole/slot/dish/hardware cut specs `{ shape?: 'cylinder'|'slot'|'dish'|'counterbore'|'nut_trap'|'insert'|'insert_boss'|'bearing', at?: [xMm,yMm,zMm], normal?: [nx,ny,nz], diameterMm?, widthMm?, lengthMm?, depthMm?, threadPitchMm?, size?: 'M3'|'M4'|..., bore?, fitMm? }` applied automatically when the body is built or updated",
+      "roundEdges": "DeclarativeRound[] | DeclarativeRound: `{ edges?: 'all'|'top'|'bottom'|'vertical'|'inside'|number[], sizeMm: number, mode?: 'round'|'bevel' }` (or array of them; alias `roundings`) applied automatically after cuts",
+      "patterns": "DeclarativePattern[]: array of surface textures `{ at: [xMm,yMm,zMm], normal?: [nx,ny,nz], pattern: string, depthMm?: number, emboss?: boolean, options?: {...} }` applied automatically to the body faces",
+      "paint": "DeclarativePaint[]: array of paint strokes `{ at: [x,y,z] | [[x,y,z],...], rgba: [r,g,b,a?], radius?: number, flow?: number, geomName?: string }` (in metres) applied automatically after CSG",
+      "lattice": "{ sizeMm?: number, empty?: boolean, subdiv?: 0|1|2, thicknessMm?: number, ops?: LatticeOp[] }: builds a lattice body inline in a single pass. Each op in `ops` is `{ op: 'extrude'|'inset'|'bevel'|'bevel_edges'|'circle'|'revolve'|'bridge'|'faces'|'delete_faces'|'sharpen'|'dimension'|'orient'|'smooth'|'wall', ... }` in mm.",
+      "sculpt": "{ base?: 'sphere'|'cube'|'cylinder'|'humanoid'|'quadruped'|'bird'|'fish'|'hand'|'head', strokes?: SculptStroke[], cuts?: SculptCut[] }: builds a sculpted clay body inline in a single pass.",
       "joints": "SceneJoint[]: joints to parent (empty = fixed to world)",
       "children": "SceneNode[]: child bodies",
       "coupleTargetId": "id of body to gear-couple first joints with",
@@ -241,7 +278,7 @@
       "curveSegments": "number: how many box segments approximate the spline (default 28; more = smoother)",
       "curveClosed": "boolean: wrap the spline into a seamless closed loop (oval/circuit tracks). Default false.",
       "curveBank": "number: bank (roll) angle in degrees about the travel direction; positive raises the left-of-travel edge. For a counter-clockwise loop use a NEGATIVE bank to raise the outside edge (the oval_track preset uses -18).",
-      "isSculpt": "boolean: a free-form sculpted body. Its mesh is not derived from parameters; the sculpt tools own it. Set by physics_create_sculpt; do not set it by hand on an ordinary body.",
+      "isSculpt": "boolean: a free-form sculpted body. Its mesh is not derived from parameters; the sculpt tools own it. Set by physics_create_sculpt or declarative `sculpt` on the body.",
       "sculptBase": "string: which base shape it was started from. See schema.sculpting.bases.",
       "sculptVersion": "number: bumped whenever the mesh is replaced wholesale, so the viewport reloads it. Managed for you.",
       "sculptEdited": "boolean: whether any stroke has been applied since the base was set.",
@@ -1049,431 +1086,70 @@
       ]
     },
     {
-      "title": "Static Mesh Scenery (Visual Only)",
-      "description": "A decorative arch made from mesh geoms. Fixed to world (no joint), so it never moves, but it still collides normally, like any mesh geom. Set contype:0/conaffinity:0 on it if you want it truly non-colliding.",
-      "note": "Mesh vertices are in Three.js Y-up world space: X=right, Y=up, Z=toward camera. Ground at Y=0.",
+      "title": "One-Call Detailed Mechanical Assembly (Declarative Cuts, Roundings, Parametric Meshes & Lattice)",
+      "description": "Builds a complete multi-part mechanical assembly in a single physics_build_scene call: a machined mounting block with counterbored M4 holes, a 608 bearing pocket, bevelled bottom edges and filleted top edges; an extruded L-bracket with a hole; and a turned lathe pulley.",
+      "notes": [
+        "cuts and roundEdges on a body descriptor run automatically before CSG compilation — no separate physics_cut or physics_round_edges round-trips needed.",
+        "Parametric geom types ('extrude', 'lathe', 'tube', 'cone', 'wedge', 'torus') compile to closed outward-wound dynamic meshes in <1 ms.",
+        "Declarative lattice: { sizeMm, subdiv, ops: [...] } and sculpt: { base, strokes: [...] } also work inline on any body descriptor."
+      ],
       "bodies": [
         {
-          "id": "arch",
-          "name": "arch",
-          "pos": [
-            0,
-            0,
-            0
-          ],
-          "joints": [],
+          "id": "pillow_block",
+          "name": "Pillow Block",
+          "pos": [0, 0, 0.015],
+          "static": true,
           "geoms": [
-            {
-              "name": "arch_left_pillar",
-              "type": "mesh",
-              "size": [
-                1
-              ],
-              "rgba": [
-                0.7,
-                0.7,
-                0.7,
-                1
-              ],
-              "vertices": [
-                -1.1,
-                -0.1,
-                -0.1,
-                -0.9,
-                -0.1,
-                -0.1,
-                -0.9,
-                -0.1,
-                0.1,
-                -1.1,
-                -0.1,
-                0.1,
-                -1.1,
-                2.0,
-                -0.1,
-                -0.9,
-                2.0,
-                -0.1,
-                -0.9,
-                2.0,
-                0.1,
-                -1.1,
-                2.0,
-                0.1
-              ],
-              "faces": [
-                0,
-                1,
-                2,
-                0,
-                2,
-                3,
-                4,
-                6,
-                5,
-                4,
-                7,
-                6,
-                0,
-                4,
-                5,
-                0,
-                5,
-                1,
-                3,
-                2,
-                6,
-                3,
-                6,
-                7,
-                0,
-                3,
-                7,
-                0,
-                7,
-                4,
-                1,
-                5,
-                6,
-                1,
-                6,
-                2
-              ]
-            },
-            {
-              "name": "arch_right_pillar",
-              "type": "mesh",
-              "size": [
-                1
-              ],
-              "rgba": [
-                0.7,
-                0.7,
-                0.7,
-                1
-              ],
-              "vertices": [
-                0.9,
-                -0.1,
-                -0.1,
-                1.1,
-                -0.1,
-                -0.1,
-                1.1,
-                -0.1,
-                0.1,
-                0.9,
-                -0.1,
-                0.1,
-                0.9,
-                2.0,
-                -0.1,
-                1.1,
-                2.0,
-                -0.1,
-                1.1,
-                2.0,
-                0.1,
-                0.9,
-                2.0,
-                0.1
-              ],
-              "faces": [
-                0,
-                1,
-                2,
-                0,
-                2,
-                3,
-                4,
-                6,
-                5,
-                4,
-                7,
-                6,
-                0,
-                4,
-                5,
-                0,
-                5,
-                1,
-                3,
-                2,
-                6,
-                3,
-                6,
-                7,
-                0,
-                3,
-                7,
-                0,
-                7,
-                4,
-                1,
-                5,
-                6,
-                1,
-                6,
-                2
-              ]
-            },
-            {
-              "name": "arch_lintel",
-              "type": "mesh",
-              "size": [
-                1
-              ],
-              "rgba": [
-                0.6,
-                0.6,
-                0.6,
-                1
-              ],
-              "vertices": [
-                -1.1,
-                1.9,
-                -0.1,
-                1.1,
-                1.9,
-                -0.1,
-                1.1,
-                1.9,
-                0.1,
-                -1.1,
-                1.9,
-                0.1,
-                -1.1,
-                2.1,
-                -0.1,
-                1.1,
-                2.1,
-                -0.1,
-                1.1,
-                2.1,
-                0.1,
-                -1.1,
-                2.1,
-                0.1
-              ],
-              "faces": [
-                0,
-                1,
-                2,
-                0,
-                2,
-                3,
-                4,
-                6,
-                5,
-                4,
-                7,
-                6,
-                0,
-                4,
-                5,
-                0,
-                5,
-                1,
-                3,
-                2,
-                6,
-                3,
-                6,
-                7,
-                0,
-                3,
-                7,
-                0,
-                7,
-                4,
-                1,
-                5,
-                6,
-                1,
-                6,
-                2
-              ]
-            }
+            { "name": "base_plate", "type": "box", "size": [0.04, 0.025, 0.015], "rgba": [0.35, 0.42, 0.52, 1] }
           ],
-          "children": []
+          "cuts": [
+            { "shape": "bearing", "size": "608", "at": [0, 0, 15], "normal": [0, 0, 1] },
+            { "shape": "counterbore", "size": "M4", "at": [-28, -14, 15], "normal": [0, 0, 1] },
+            { "shape": "counterbore", "size": "M4", "at": [28, -14, 15], "normal": [0, 0, 1] },
+            { "shape": "counterbore", "size": "M4", "at": [-28, 14, 15], "normal": [0, 0, 1] },
+            { "shape": "counterbore", "size": "M4", "at": [28, 14, 15], "normal": [0, 0, 1] }
+          ],
+          "roundEdges": [
+            { "edges": "bottom", "sizeMm": 0.6, "mode": "bevel" },
+            { "edges": "top", "sizeMm": 2.0, "mode": "round" }
+          ]
+        },
+        {
+          "id": "turned_pulley",
+          "name": "Turned Pulley",
+          "pos": [0, 0, 0.04],
+          "type": "lathe",
+          "profile": [[0.004, -0.008], [0.022, -0.008], [0.022, -0.003], [0.016, 0], [0.022, 0.003], [0.022, 0.008], [0.004, 0.008]],
+          "rgba": [0.85, 0.68, 0.22, 1]
         }
       ]
     },
     {
-      "title": "Scripted Launch: Coin Flip into Cup",
-      "description": "A gold coin launched off the floor with an initial velocity via a first-tick script. Demonstrates api.setVelocity / api.setAngularVelocity and building a hollow cup from fixed box walls. No floor body needed; MuJoCo's built-in ground plane is used.",
+      "title": "Scripted Launch: Coin Flip into Hollow Cup",
+      "description": "A gold coin launched off the floor with an initial velocity via a first-tick script into a hollow cup built as a single boolean body (outer cylinder minus inner cylinder). Automatic convex decomposition (`collision: 'auto'`) lets the coin land inside the cup without building 5 separate wall bodies.",
       "notes": [
         "All script calls use api.* prefix.",
-        "The time guard (api.getTime() < 0.003) fires only on the first simulation step.",
-        "Cup walls are separate fixed bodies (joints:[]); no joint means fixed to world.",
-        "Trajectory maths: vx=0.4, vz=5.0 → coin reaches x=0.4m at t≈1s, drops through cup opening at z=0.06m."
+        "The time guard (api.getTime() === 0) fires on the first simulation step.",
+        "A hollow body (outer cylinder + inner cylinder with csg:'difference') is automatically decomposed into convex pieces so objects land inside its cavity."
       ],
       "bodies": [
         {
-          "id": "cup_front",
-          "name": "cup_front",
-          "pos": [
-            0.4,
-            0.037,
-            0.03
-          ],
+          "id": "cup",
+          "name": "cup",
+          "pos": [0.4, 0, 0.03],
           "joints": [],
           "geoms": [
-            {
-              "name": "cup_front_g",
-              "type": "box",
-              "size": [
-                0.039,
-                0.002,
-                0.03
-              ],
-              "rgba": [
-                0.95,
-                0.9,
-                0.82,
-                1
-              ]
-            }
-          ]
-        },
-        {
-          "id": "cup_back",
-          "name": "cup_back",
-          "pos": [
-            0.4,
-            -0.037,
-            0.03
-          ],
-          "joints": [],
-          "geoms": [
-            {
-              "name": "cup_back_g",
-              "type": "box",
-              "size": [
-                0.039,
-                0.002,
-                0.03
-              ],
-              "rgba": [
-                0.95,
-                0.9,
-                0.82,
-                1
-              ]
-            }
-          ]
-        },
-        {
-          "id": "cup_left",
-          "name": "cup_left",
-          "pos": [
-            0.363,
-            0,
-            0.03
-          ],
-          "joints": [],
-          "geoms": [
-            {
-              "name": "cup_left_g",
-              "type": "box",
-              "size": [
-                0.002,
-                0.035,
-                0.03
-              ],
-              "rgba": [
-                0.95,
-                0.9,
-                0.82,
-                1
-              ]
-            }
-          ]
-        },
-        {
-          "id": "cup_right",
-          "name": "cup_right",
-          "pos": [
-            0.437,
-            0,
-            0.03
-          ],
-          "joints": [],
-          "geoms": [
-            {
-              "name": "cup_right_g",
-              "type": "box",
-              "size": [
-                0.002,
-                0.035,
-                0.03
-              ],
-              "rgba": [
-                0.95,
-                0.9,
-                0.82,
-                1
-              ]
-            }
-          ]
-        },
-        {
-          "id": "cup_bottom",
-          "name": "cup_bottom",
-          "pos": [
-            0.4,
-            0,
-            0.002
-          ],
-          "joints": [],
-          "geoms": [
-            {
-              "name": "cup_bottom_g",
-              "type": "box",
-              "size": [
-                0.035,
-                0.035,
-                0.002
-              ],
-              "rgba": [
-                0.95,
-                0.9,
-                0.82,
-                1
-              ]
-            }
+            { "name": "cup_outer", "type": "cylinder", "size": [0.038, 0.03], "rgba": [0.95, 0.9, 0.82, 1] },
+            { "name": "cup_inner", "type": "cylinder", "pos": [0, 0, 0.004], "size": [0.034, 0.03], "csg": "difference" }
           ]
         },
         {
           "id": "coin",
           "name": "coin",
-          "pos": [
-            0,
-            0,
-            0.001
-          ],
-          "joints": [
-            {
-              "name": "coin_joint",
-              "type": "free"
-            }
-          ],
+          "pos": [0, 0, 0.001],
+          "joints": [{ "name": "coin_joint", "type": "free" }],
           "geoms": [
-            {
-              "name": "coin_geom",
-              "type": "cylinder",
-              "size": [
-                0.02,
-                0.001
-              ],
-              "mass": 0.01,
-              "rgba": [
-                0.85,
-                0.65,
-                0.1,
-                1
-              ]
-            }
+            { "name": "coin_geom", "type": "cylinder", "size": [0.02, 0.001], "mass": 0.01, "rgba": [0.85, 0.65, 0.1, 1] }
           ],
           "script": "if (api.getTime() === 0) { api.setVelocity([0.4, 0, 5.0], 'coin'); api.setAngularVelocity([0, 25, 0], 'coin'); }"
         }

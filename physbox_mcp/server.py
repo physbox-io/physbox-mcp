@@ -1663,23 +1663,24 @@ async def physics_set_color(id: str, rgba: list[float], geomName: str | None = N
 @mcp.tool(description=get_doc(physics_docs, "physics_paint", "Brush colour onto part of a geom's surface"))
 async def physics_paint(
     id: str,
-    at: list[Any],
-    rgba: list[float],
+    at: list[Any] | None = None,
+    rgba: list[float] | None = None,
     radius: float = 0.008,
     geomName: str | None = None,
     flow: float = 1.0,
     erase: bool = False,
+    strokes: list[dict[str, Any]] | None = None,
 ) -> Any:
-    return await get_conn(Ph).send(
-        "PAINT",
-        {"targetId": id, "at": at, "rgba": rgba, "radius": radius, "geomName": geomName, "flow": flow, "erase": erase},
-        timeout=60.0,
+    payload = compact_dict(
+        targetId=id, at=at, rgba=rgba, radius=radius, geomName=geomName,
+        flow=flow, erase=erase, strokes=strokes,
     )
+    return await get_conn(Ph).send("PAINT", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_apply_pattern", "Lay a surface pattern on one face of a part"))
 async def physics_apply_pattern(
     id: str,
-    at: list[float],
+    at: list[float] | None = None,
     normal: list[float] | None = None,
     pattern: str | None = None,
     options: dict[str, Any] | None = None,
@@ -1693,11 +1694,13 @@ async def physics_apply_pattern(
     stopAtDeg: float | None = None,
     remove: bool = False,
     preview: bool = False,
+    patterns: list[dict[str, Any]] | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id, at=at, normal=normal, pattern=pattern, options=options,
         depthMm=depthMm, emboss=emboss, borderMm=borderMm, cellMm=cellMm, projection=projection,
         twistDeg=twistDeg, scale=scale, stopAtDeg=stopAtDeg, remove=remove or None, preview=preview or None,
+        patterns=patterns,
     )
     # The textured surface is built in the app's texture worker: a big face
     # at fine detail, or a curved one being unwrapped, takes some seconds.
@@ -1736,7 +1739,7 @@ async def physics_set_sculpt_base(id: str, base: str) -> Any:
 @mcp.tool(description=get_doc(physics_docs, "physics_sculpt", "Brush a sculpt body's surface"))
 async def physics_sculpt(
     id: str,
-    at: list[Any],
+    at: list[Any] | None = None,
     brush: str = "draw",
     radius: float = 0.04,
     strength: float = 0.5,
@@ -1745,6 +1748,7 @@ async def physics_sculpt(
     detail: float | None = None,
     dynamicTopology: bool | None = None,
     delta: list[float] | None = None,
+    strokes: list[dict[str, Any]] | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id,
@@ -1757,6 +1761,7 @@ async def physics_sculpt(
         detail=detail,
         dynamicTopology=dynamicTopology,
         delta=delta,
+        strokes=strokes,
     )
     return await get_conn(Ph).send("SCULPT", payload, timeout=60.0)
 
@@ -1923,8 +1928,15 @@ async def physics_create_lattice(
     sizeMm: float = 40.0,
     edit: bool = False,
     parent: str | None = None,
+    empty: bool | None = None,
+    subdiv: int | None = None,
+    thicknessMm: float | None = None,
+    ops: list[dict[str, Any]] | None = None,
 ) -> Any:
-    payload = compact_dict(name=name, pos=pos, sizeMm=sizeMm, edit=edit, parent=parent)
+    payload = compact_dict(
+        name=name, pos=pos, sizeMm=sizeMm, edit=edit, parent=parent,
+        empty=empty, subdiv=subdiv, thicknessMm=thicknessMm, ops=ops,
+    )
     return await get_conn(Ph).send("CREATE_LATTICE", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_lattice", "Read a lattice body's faces back"))
@@ -2041,12 +2053,13 @@ async def physics_cut(
     size: str | None = None,
     bore: str | None = None,
     fitMm: float | None = None,
+    cuts: list[dict[str, Any]] | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id, shape=shape, at=at, normal=normal,
         diameterMm=diameterMm, widthMm=widthMm, lengthMm=lengthMm, depthMm=depthMm,
         threadPitchMm=threadPitchMm, threadLeft=threadLeft, threadFitMm=threadFitMm,
-        size=size, bore=bore, fitMm=fitMm,
+        size=size, bore=bore, fitMm=fitMm, cuts=cuts,
     )
     return await get_conn(Ph).send("BODY_CUT", payload, timeout=60.0)
 
@@ -2061,8 +2074,9 @@ async def physics_round_edges(
     sizeMm: float | None = None,
     mode: str = "round",
     remove: bool | None = None,
+    roundings: list[dict[str, Any]] | None = None,
 ) -> Any:
-    payload = compact_dict(targetId=id, edges=edges, sizeMm=sizeMm, mode=mode, remove=remove)
+    payload = compact_dict(targetId=id, edges=edges, sizeMm=sizeMm, mode=mode, remove=remove, roundings=roundings)
     return await get_conn(Ph).send("ROUND_EDGES", payload, timeout=120.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_dimension", "Set the size or place of part of a lattice shape"))
