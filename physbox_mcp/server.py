@@ -177,6 +177,31 @@ def get_reference_docs(docs: dict) -> dict:
     extra_sections = {k: v for k, v in docs.items() if k not in ("tools", "schema")}
     return {**schema_fields, **extra_sections}
 
+def get_reference_section(docs: dict, section: str | None) -> dict:
+    """One part of get_reference_docs, or an index of them.
+
+    Mesh's reference runs to about 75 KB, more than an agent can read in one
+    tool result, so the bare call returns the overview and workflow plus a
+    list of every section with its size, and `section` fetches one ("all"
+    gives the whole thing as before). Sections are the flattened schema fields
+    (geomTypes, nodeFields, openScadNotes ...) and the top-level ones
+    (gotchas, examples, machining ...).
+    """
+    full = get_reference_docs(docs)
+    if section == "all":
+        return full
+    if section:
+        if section in full:
+            return {section: full[section]}
+        return {"error": f"No section {section!r}.", "sections": sorted(full)}
+    sizes = {k: len(json.dumps(v, ensure_ascii=False)) for k, v in full.items()}
+    return {
+        "overview": full.get("overview"),
+        "workflow": full.get("workflow"),
+        "sections": dict(sorted(sizes.items())),
+        "hint": "Call again with section=<name> for one section (sizes are in characters), or section='all' for everything.",
+    }
+
 def get_doc(docs: dict, tool_name: str, fallback: str = "") -> str:
     """Extract tool description string from app documentation with fallback."""
     return docs.get("tools", {}).get(tool_name, fallback)
@@ -905,9 +930,19 @@ async def physics_export_relief(
     stock_width_mm: float | None = None,
     stock_depth_mm: float | None = None,
     stock_thickness_mm: float | None = None,
+    vertical_scale_mode: str | None = None,
+    vertical_exaggeration: float | None = None,
+    fit_mode: str | None = None,
+    scale_percent: float | None = None,
+    background_mode: str | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
+        verticalScaleMode=vertical_scale_mode,
+        verticalExaggeration=vertical_exaggeration,
+        fitMode=fit_mode,
+        scalePercent=scale_percent,
+        backgroundMode=background_mode,
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
         finishingToolType=finishing_tool_type,
@@ -946,10 +981,16 @@ async def physics_add_simulation(
     machine: str | None = None,
     bit_dia_mm: float | None = None,
     scale_percent: float | None = None,
+    vertical_scale_mode: str | None = None,
+    fit_mode: str | None = None,
+    background_mode: str | None = None,
 ) -> Any:
     payload = compact_dict(
         kind=kind,
         scalePercent=scale_percent,
+        verticalScaleMode=vertical_scale_mode,
+        fitMode=fit_mode,
+        backgroundMode=background_mode,
         placement=placement,
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
@@ -1423,8 +1464,8 @@ async def physics_validate_scad(scad: str) -> Any:
     return await get_conn(Ph).send("VALIDATE_SCAD", {"scad": scad}, timeout=120.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_state", "Return PhysBox: Mesh state"))
-async def physics_get_state() -> Any:
-    return await get_conn(Ph).send("GET_STATE")
+async def physics_get_state(include_meshes: bool = False) -> Any:
+    return await get_conn(Ph).send("GET_STATE", compact_dict(includeMeshes=include_meshes or None))
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_scene", "Return physics scene graph"))
 async def physics_get_scene() -> Any:
@@ -1472,15 +1513,19 @@ async def physics_check_collisions() -> Any:
 
 @mcp.tool(description=get_doc(physics_docs, "physics_measure", "Measure a distance or an angle in the drawn scene, snapping to real features"))
 async def physics_measure(
-    start: list[float],
-    end: list[float],
+    start: list[float] | None = None,
+    end: list[float] | None = None,
     corner: list[float] | None = None,
     snap: bool = True,
     withinMm: float = 3.0,
+    body: str | None = None,
+    axis: str | None = None,
 ) -> Any:
     # start/end rather than from/to: `from` is a Python keyword, and a parameter
     # called from_ is a wart every caller would have to see.
-    payload = compact_dict(**{"from": start, "to": end, "corner": corner, "snap": snap, "withinMm": withinMm})
+    if body is None and (start is None or end is None):
+        return {"ok": False, "error": "Give start and end to measure a distance or angle, or body to measure its tilt."}
+    payload = compact_dict(**{"from": start, "to": end, "corner": corner, "snap": snap, "withinMm": withinMm, "body": body, "axis": axis})
     return await get_conn(Ph).send("MEASURE", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_import_stl", "Import a binary or ASCII STL file into the 3D physics simulation as a parametric OpenSCAD node, raw mesh, or primitive."))
@@ -1511,6 +1556,9 @@ async def physics_set_environment(
     floorFriction: float | None = None,
     floorBounce: float | None = None,
     fidelity: str | None = None,
+    stock_width_mm: float | None = None,
+    stock_depth_mm: float | None = None,
+    stock_thickness_mm: float | None = None,
 ) -> Any:
     payload = compact_dict(
         gravityZ=gravityZ,
@@ -1520,6 +1568,9 @@ async def physics_set_environment(
         floorFriction=floorFriction,
         floorBounce=floorBounce,
         fidelity=fidelity,
+        stockWidthMm=stock_width_mm,
+        stockDepthMm=stock_depth_mm,
+        stockThicknessMm=stock_thickness_mm,
     )
     return await get_conn(Ph).send("SET_ENVIRONMENT", payload)
 
@@ -1590,8 +1641,8 @@ async def physics_set_camera(
     return await get_conn(Ph).send("SET_CAMERA", payload)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_screenshot", "Capture current rendered frame of 3D viewport as a PNG image."))
-async def physics_get_screenshot() -> Any:
-    result = await get_conn(Ph).send("SCREENSHOT")
+async def physics_get_screenshot(show_colliders: bool | None = None) -> Any:
+    result = await get_conn(Ph).send("SCREENSHOT", compact_dict(showColliders=show_colliders))
     if not isinstance(result, dict) or not result.get("ok"):
         error = result.get("error") if isinstance(result, dict) else "Unknown error"
         raise RuntimeError(f"Screenshot failed: {error}")
@@ -1602,8 +1653,8 @@ async def physics_get_screenshot() -> Any:
     return Image(data=base64.b64decode(b64), format="png")
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_schema", "Return PhysBox: Mesh schema"))
-async def physics_get_schema() -> Any:
-    return get_reference_docs(physics_docs)
+async def physics_get_schema(section: str | None = None) -> Any:
+    return get_reference_section(physics_docs, section)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_build_scene", "Build scene from bodies"))
 async def physics_build_scene(bodies: list[Any]) -> Any:
@@ -2053,13 +2104,19 @@ async def physics_cut(
     size: str | None = None,
     bore: str | None = None,
     fitMm: float | None = None,
+    outline: str | None = None,
+    cornerRadiusMm: float | None = None,
+    floor: str | None = None,
+    floorRadiusMm: float | None = None,
     cuts: list[dict[str, Any]] | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id, shape=shape, at=at, normal=normal,
         diameterMm=diameterMm, widthMm=widthMm, lengthMm=lengthMm, depthMm=depthMm,
         threadPitchMm=threadPitchMm, threadLeft=threadLeft, threadFitMm=threadFitMm,
-        size=size, bore=bore, fitMm=fitMm, cuts=cuts,
+        size=size, bore=bore, fitMm=fitMm,
+        outline=outline, cornerRadiusMm=cornerRadiusMm, floor=floor, floorRadiusMm=floorRadiusMm,
+        cuts=cuts,
     )
     return await get_conn(Ph).send("BODY_CUT", payload, timeout=60.0)
 
