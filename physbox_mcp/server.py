@@ -1760,6 +1760,7 @@ async def physics_apply_pattern(
     twistDeg: float | None = None,
     scale: float | None = None,
     stopAtDeg: float | None = None,
+    color: list[float] | str | None = None,
     remove: bool = False,
     preview: bool = False,
     patterns: list[dict[str, Any]] | None = None,
@@ -1767,7 +1768,7 @@ async def physics_apply_pattern(
     payload = compact_dict(
         targetId=id, at=at, normal=normal, pattern=pattern, options=options,
         depthMm=depthMm, emboss=emboss, borderMm=borderMm, cellMm=cellMm, projection=projection,
-        twistDeg=twistDeg, scale=scale, stopAtDeg=stopAtDeg, remove=remove or None, preview=preview or None,
+        twistDeg=twistDeg, scale=scale, stopAtDeg=stopAtDeg, color=color, remove=remove or None, preview=preview or None,
         patterns=patterns,
     )
     # The textured surface is built in the app's texture worker: a big face
