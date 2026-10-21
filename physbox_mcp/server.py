@@ -390,6 +390,13 @@ def get_conn(port: int) -> AppConnection:
         _connections[port] = AppConnection(port)
     return _connections[port]
 
+async def _cmd(cmd: str, payload: dict | None = None, app: str = "physics") -> Any:
+    port = APPS[app]["port"]
+    return await get_conn(port).send(cmd, payload, timeout=120.0)
+
+def _fmt(res: Any) -> Any:
+    return res
+
 # ── Session control ───────────────────────────────────────────────────────────
 #
 # Session state lives on the primary only: it is the process holding the browser
@@ -972,12 +979,18 @@ async def physics_export_relief(
     return _deliver_export(result, out_dir)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_add_simulation", (
-    "Cut a relief, machining, laser or contour job back out of its stock and add the result to "
-    "the Mesh scene as a body, beside the model or laid over it. Returns its name and volumes."
+    "Cut a relief, machining, laser, contour, mold, or mold cast job back out and add the result to "
+    "the Mesh scene as a body, beside the model or laid over it. kind='mold' adds the generated 3D mold "
+    "to the scene; kind='mold_cast' simulates what would be cast from a mold (either an existing mold body "
+    "via body_id or a newly generated mold for the scene) and adds the cast body to the scene. Returns its name and volumes."
 )))
 async def physics_add_simulation(
     kind: str,
     placement: str = "beside",
+    body_id: str | None = None,
+    mold_type: str | None = None,
+    allow_undercuts: bool | None = None,
+    trim_channels: bool | None = None,
     roughing_tool_dia_mm: float | None = None,
     finishing_tool_dia_mm: float | None = None,
     finishing_tool_type: str | None = None,
@@ -999,6 +1012,24 @@ async def physics_add_simulation(
     fit_mode: str | None = None,
     background_mode: str | None = None,
 ) -> Any:
+    """Cut a relief, machining, laser, contour, mold, or mold cast job and add the result to the Mesh scene.
+
+    Supported kinds:
+    - 'relief': Relief carve simulation
+    - 'machining': Multi-sided solid machining simulation
+    - 'laser': Laser cut / nested sheet parts
+    - 'contour': Stacked contour sheet slice simulation
+    - 'mold': Adds the generated 3D mold to the scene
+    - 'mold_cast': Simulates what would be cast from a mold — either an existing mold body via `body_id`
+      or a newly generated mold for the scene — and adds the cast body to the scene.
+
+    Args:
+        kind: 'relief', 'machining', 'laser', 'contour', 'mold', or 'mold_cast'
+        placement: 'beside' or 'over'
+        body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
+        mold_type: 'clamshell' or 'open', for kind='mold' or 'mold_cast'
+        trim_channels: For kind='mold_cast', whether to trim sprue/vent runner stubs
+    """
     payload = compact_dict(
         kind=kind,
         scalePercent=scale_percent,
@@ -1006,6 +1037,10 @@ async def physics_add_simulation(
         fitMode=fit_mode,
         backgroundMode=background_mode,
         placement=placement,
+        bodyId=body_id,
+        moldType=mold_type,
+        allowUndercuts=allow_undercuts,
+        trimChannels=trim_channels,
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
         finishingToolType=finishing_tool_type,
@@ -2153,6 +2188,46 @@ async def physics_round_edges(
 ) -> Any:
     payload = compact_dict(targetId=id, edges=edges, sizeMm=sizeMm, mode=mode, remove=remove, roundings=roundings)
     return await get_conn(Ph).send("ROUND_EDGES", payload, timeout=120.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_repair_mesh", (
+    "Repair non-manifold, open, degenerate, or inconsistently wound triangle meshes in the scene."
+)))
+async def physics_repair_mesh(
+    id: str | None = None,
+    geom_name: str | None = None,
+    weld_tolerance_mm: float = 0.01,
+    fill_holes: bool = True,
+    fix_winding: bool = True,
+    remove_duplicates: bool = True,
+    remove_degenerates: bool = True,
+) -> Any:
+    """Repair non-manifold, open, degenerate, or inconsistently wound triangle meshes in the scene.
+
+    Welds vertices within `weld_tolerance_mm` (default 0.01 mm), removes zero-area degenerate
+    triangles and duplicate/opposite-wound triangle pairs, resolves non-manifold edges (3+ incident
+    triangles), fills open boundary edge loops, and fixes inverted shell winding so meshes are
+    watertight and ready for 3D CSG booleans, slicing, or simulation.
+
+    Args:
+        id: Body id or name to repair. Omit to repair all mesh bodies in the scene.
+        geom_name: Optional specific mesh geom name on the body.
+        weld_tolerance_mm: Vertex welding distance threshold in mm (default 0.01).
+        fill_holes: Cap open boundary loops with triangulated patches (default True).
+        fix_winding: Orient connected shells consistently with positive enclosed volume (default True).
+        remove_duplicates: Strip duplicate and zero-volume folded face pairs (default True).
+        remove_degenerates: Strip zero-area and collinear sliver triangles (default True).
+    """
+    payload = compact_dict(
+        targetId=id,
+        bodyId=id,
+        geomName=geom_name,
+        weldToleranceMm=weld_tolerance_mm,
+        fillHoles=fill_holes,
+        fixWinding=fix_winding,
+        removeDuplicates=remove_duplicates,
+        removeDegenerates=remove_degenerates,
+    )
+    return await get_conn(Ph).send("REPAIR_MESH", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_dimension", "Set the size or place of part of a lattice shape"))
 async def physics_lattice_dimension(
