@@ -1016,7 +1016,7 @@ async def physics_add_simulation(
         kind: 'relief', 'machining', 'laser', 'contour', 'mold', or 'mold_cast'
         placement: 'beside' or 'over'
         body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
-        mold_type: 'clamshell' or 'open', for kind='mold' or 'mold_cast'
+        mold_type: 'auto' (default: simplest mold that keeps the part), 'clamshell' or 'open', for kind='mold' or 'mold_cast'
         trim_channels: For kind='mold_cast', whether to trim sprue/vent runner stubs
     """
     payload = compact_dict(
