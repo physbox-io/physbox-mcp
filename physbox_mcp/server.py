@@ -898,20 +898,16 @@ async def physics_split_for_print(
     "given number of setups. Returns a summary, any warnings, and the list of files produced — "
     "NOT their contents. Pass out_dir to actually get the files: each is written there and the "
     "returned path tells you where. Without out_dir you only learn the names and sizes. "
-    "stock_thickness_mm of 0 means take it from the part."
+    "The stock is the bench board, set with physics_set_environment."
 )))
 async def physics_export_machining(
     sides: int = 1,
-    stock_thickness_mm: float = 0,
     tool_dia_mm: float = 3.0,
     material: str = "aluminium",
     finishing_tool_type: str = "flat",
-    scale_percent: float | None = None,
     setups: str | int | None = None,
     clearance_mm: float | None = None,
     tool_stickout_mm: float | None = None,
-    stock_width_mm: float | None = None,
-    stock_depth_mm: float | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -920,10 +916,6 @@ async def physics_export_machining(
         setups=setups,
         clearanceMm=clearance_mm,
         toolStickoutMm=tool_stickout_mm,
-        stockWidthMm=stock_width_mm,
-        stockDepthMm=stock_depth_mm,
-        scalePercent=scale_percent,
-        stockThicknessMm=stock_thickness_mm,
         toolDiaMm=tool_dia_mm,
         material=material,
         finishingToolType=finishing_tool_type,
@@ -951,7 +943,6 @@ async def physics_export_relief(
     vertical_scale_mode: str | None = None,
     vertical_exaggeration: float | None = None,
     fit_mode: str | None = None,
-    scale_percent: float | None = None,
     background_mode: str | None = None,
     out_dir: str | None = None,
 ) -> Any:
@@ -959,7 +950,6 @@ async def physics_export_relief(
         verticalScaleMode=vertical_scale_mode,
         verticalExaggeration=vertical_exaggeration,
         fitMode=fit_mode,
-        scalePercent=scale_percent,
         backgroundMode=background_mode,
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
@@ -1007,7 +997,6 @@ async def physics_add_simulation(
     material_thickness_mm: float | None = None,
     machine: str | None = None,
     bit_dia_mm: float | None = None,
-    scale_percent: float | None = None,
     vertical_scale_mode: str | None = None,
     fit_mode: str | None = None,
     background_mode: str | None = None,
@@ -1032,7 +1021,6 @@ async def physics_add_simulation(
     """
     payload = compact_dict(
         kind=kind,
-        scalePercent=scale_percent,
         verticalScaleMode=vertical_scale_mode,
         fitMode=fit_mode,
         backgroundMode=background_mode,
