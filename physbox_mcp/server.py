@@ -1570,13 +1570,29 @@ async def physics_measure(
 
 @mcp.tool(description=get_doc(physics_docs, "physics_import_stl", "Import a binary or ASCII STL file into the 3D physics simulation as a parametric OpenSCAD node, raw mesh, or primitive."))
 async def physics_import_stl(
-    stlData: str,
+    stlData: str | None = None,
     name: str = "imported_stl",
     importMode: str = "scad_parametric",
     pos: list[float] | None = None,
     scale: float | list[float] | None = None,
-    dynamic: bool = True
+    dynamic: bool = True,
+    path: str | None = None,
 ) -> Any:
+    timeout = 60.0
+    if path is not None:
+        # An STL big enough to matter (a sculpt, a scan) is far too big to pass
+        # inline as stlData, so read it here the way load_scene_file reads a scene.
+        file = _local_path(path)
+        if not file.is_file():
+            raise RuntimeError(f"No file at {file}" + (f" (from {path})" if str(file) != path else ""))
+        # As a data URL: bare base64 of a big binary STL can contain "solid" by
+        # chance, and the app would then try to read it as ASCII.
+        stlData = "data:model/stl;base64," + base64.b64encode(file.read_bytes()).decode("ascii")
+        if name == "imported_stl":
+            name = file.stem
+        timeout = 180.0
+    if not stlData:
+        raise RuntimeError("Give path (an STL file on disk) or stlData (the file inline, base64 or ASCII).")
     payload = compact_dict(
         stlData=stlData,
         name=name,
@@ -1585,7 +1601,15 @@ async def physics_import_stl(
         scale=scale,
         dynamic=dynamic
     )
-    return await get_conn(Ph).send("IMPORT_STL", payload, timeout=60.0)
+    size = len(stlData)
+    # Same limit, and for the same reason, as physics_load_scene_file.
+    if not is_primary and size > WS_MAX_MESSAGE - 64 * 1024:
+        raise RuntimeError(
+            f"The STL is {size / 1e6:.1f} MB as a command, over the hub's {WS_MAX_MESSAGE // (1024 * 1024)} MB "
+            "limit for commands relayed from a secondary MCP session. Import it from the session that owns the hub "
+            "(the first one started), or use Import STL in the app."
+        )
+    return await get_conn(Ph).send("IMPORT_STL", payload, timeout=timeout)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_set_environment", "Set environment parameters"))
 async def physics_set_environment(
