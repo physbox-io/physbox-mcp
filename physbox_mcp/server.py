@@ -827,6 +827,44 @@ async def physics_export_cast(
     result = await get_conn(Ph).send("EXPORT_CAST", payload, timeout=180.0)
     return _deliver_export(result, out_dir)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_make_pour_box", (
+    "Make a printed pour box (base with a groove, sleeve, optional wick pin) for casting a silicone "
+    "mold of a master in the Mesh scene. Reports the fill line and the silicone in grams; apply=True "
+    "adds the pieces to the scene; out_dir writes their STLs."
+)))
+async def physics_make_pour_box(
+    body_id: str | None = None,
+    cover_mm: float | None = None,
+    wall_mm: float | None = None,
+    clearance_mm: float | None = None,
+    base_mm: float | None = None,
+    groove_mm: float | None = None,
+    freeboard_mm: float | None = None,
+    shape: str | None = None,
+    pin: bool | None = None,
+    pin_dia_mm: float | None = None,
+    silicone: str | None = None,
+    apply: bool = False,
+    out_dir: str | None = None,
+) -> Any:
+    payload = compact_dict(
+        bodyId=body_id,
+        coverMm=cover_mm,
+        wallMm=wall_mm,
+        clearanceMm=clearance_mm,
+        baseMm=base_mm,
+        grooveMm=groove_mm,
+        freeboardMm=freeboard_mm,
+        shape=shape,
+        pin=pin,
+        pinDiaMm=pin_dia_mm,
+        silicone=silicone,
+        apply=apply or None,
+        includeFiles=out_dir is not None,
+    )
+    result = await get_conn(Ph).send("MAKE_POUR_BOX", payload, timeout=120.0)
+    return _deliver_export(result, out_dir)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_set_cast_prep", (
     "Prepare every part in the Mesh scene for casting, in the model itself: chamfer outside edges, "
     "fillet inside corners and, for method 'sand', bake draft into every part. Calling it again "
@@ -1000,6 +1038,8 @@ async def physics_add_simulation(
     vertical_scale_mode: str | None = None,
     fit_mode: str | None = None,
     background_mode: str | None = None,
+    pour_direction: str | None = None,
+    fill_mm: float | None = None,
 ) -> Any:
     """Cut a relief, machining, laser, contour, mold, or mold cast job and add the result to the Mesh scene.
 
@@ -1018,6 +1058,8 @@ async def physics_add_simulation(
         body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
         mold_type: 'auto' (default: simplest mold that keeps the part), 'clamshell' or 'open', for kind='mold' or 'mold_cast'
         trim_channels: For kind='mold_cast', whether to trim sprue/vent runner stubs
+        pour_direction: For kind='mold_cast' with body_id: the side poured from, '+z', '-z', '+x', '-x', '+y', '-y' (default: the best side)
+        fill_mm: For kind='mold_cast' with body_id: fill depth in mm (default: to the rim)
     """
     payload = compact_dict(
         kind=kind,
@@ -1045,6 +1087,8 @@ async def physics_add_simulation(
         materialThicknessMm=material_thickness_mm,
         machine=machine,
         bitDiaMm=bit_dia_mm,
+        pourDirection=pour_direction,
+        fillMm=fill_mm,
     )
     # Plans the job, then cuts it out of the stock on the tab's export worker.
     return await get_conn(Ph).send("ADD_SIMULATION", payload, timeout=300.0)
