@@ -1855,7 +1855,15 @@ async def physics_apply_pattern(
     remove: bool = False,
     preview: bool = False,
     patterns: list[dict[str, Any]] | None = None,
+    image_path: str | None = None,
 ) -> Any:
+    # The 'image' pattern's picture, read here from disk: the app cannot reach
+    # the agent's files. image_path, or options.image_path in any one pattern.
+    if image_path is not None:
+        options = {**(options or {}), "image_path": image_path}
+    options = _inline_image(options)
+    if patterns:
+        patterns = [{**p, "options": _inline_image(p.get("options"))} if isinstance(p, dict) else p for p in patterns]
     payload = compact_dict(
         targetId=id, at=at, normal=normal, pattern=pattern, options=options,
         depthMm=depthMm, emboss=emboss, borderMm=borderMm, cellMm=cellMm, projection=projection,
@@ -1865,6 +1873,22 @@ async def physics_apply_pattern(
     # The textured surface is built in the app's texture worker: a big face
     # at fine detail, or a curved one being unwrapped, takes some seconds.
     return await get_conn(Ph).send("APPLY_PATTERN", payload, timeout=120.0)
+
+_IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp"}
+
+def _inline_image(options: dict[str, Any] | None) -> dict[str, Any] | None:
+    """options with image_path swapped for the picture itself, as a data URL."""
+    if not options or "image_path" not in options:
+        return options
+    rest = {k: v for k, v in options.items() if k != "image_path"}
+    file = _local_path(str(options["image_path"]))
+    if not file.is_file():
+        raise RuntimeError(f"No picture at {file}")
+    mime = _IMAGE_TYPES.get(file.suffix.lower())
+    if mime is None:
+        raise RuntimeError(f"{file.name}: the image pattern reads PNG, JPEG, WebP, GIF or BMP.")
+    rest["image"] = f"data:{mime};base64," + base64.b64encode(file.read_bytes()).decode("ascii")
+    return rest
 
 @mcp.tool(description=get_doc(physics_docs, "physics_knife", "Divide a part with a plane: a seam on its faces, or cut through"))
 async def physics_knife(
