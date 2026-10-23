@@ -302,6 +302,7 @@
       "damping": "number: velocity-proportional resistance (for free joints, scales drag force/torque to decay velocity and spin uniformly)",
       "stiffness": "number: spring constant pulling back to springref",
       "springref": "number: rest angle/position for spring",
+      "frictionloss": "number: dry joint friction — the torque (N*m, hinge) or force (N, slide) the joint holds against before it moves, and resists with while it moves. Use it for anything that should stay where it is left: a lid propped open, a lamp arm, a stiff print-in-place hinge. damping cannot do this: it fades to nothing as the joint slows, so a damped lid still falls shut, only later. To hold against gravity it must exceed the load, e.g. a 0.2 kg lid with its centre 50 mm from the hinge needs > 0.2*9.81*0.05 = 0.1 N*m. Ball joints apply it to all three axes; free joints ignore it.",
       "limited": "boolean: whether range limits are active",
       "range": "[min,max]: joint limits in degrees (hinge) or meters (slide)",
       "actuator": "{ type:'velocity'|'motor', kv?:number, gear?:number, ctrlValue?:number }",
