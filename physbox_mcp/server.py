@@ -1681,6 +1681,57 @@ async def physics_import_stl(
         )
     return await get_conn(Ph).send("IMPORT_STL", payload, timeout=timeout)
 
+_IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+                ".gif": "image/gif", ".bmp": "image/bmp"}
+
+
+@mcp.tool(description=get_doc(physics_docs, "physics_set_reference_image", "Pin a picture in the viewport to model from"))
+async def physics_set_reference_image(
+    path: str | None = None,
+    imageId: str | None = None,
+    name: str | None = None,
+    plane: str | None = None,
+    center: list[float] | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    opacity: float | None = None,
+    overlay: bool | None = None,
+    hidden: bool | None = None,
+    remove: bool = False,
+    clear: bool = False,
+) -> Any:
+    image = None
+    if path is not None:
+        file = _local_path(path)
+        if not file.is_file():
+            raise RuntimeError(f"No file at {file}" + (f" (from {path})" if str(file) != path else ""))
+        mime = _IMAGE_TYPES.get(file.suffix.lower())
+        if mime is None:
+            raise RuntimeError(f"{file.name} is not a picture this can read: give a {', '.join(sorted(_IMAGE_TYPES))} file.")
+        data = file.read_bytes()
+        # The app cuts it down to 1600 px anyway; this only stops a camera RAW
+        # or a poster-size scan being shipped over the socket to be thrown away.
+        if len(data) > 25 * 1024 * 1024:
+            raise RuntimeError(f"{file.name} is {len(data) / 1e6:.0f} MB. Give a picture under 25 MB.")
+        image = f"data:{mime};base64," + base64.b64encode(data).decode("ascii")
+        if name is None and imageId is None:
+            name = file.stem
+    payload = compact_dict(
+        image=image,
+        imageId=imageId,
+        name=name,
+        plane=plane,
+        center=center,
+        width=width,
+        height=height,
+        opacity=opacity,
+        overlay=overlay,
+        hidden=hidden,
+        remove=remove or None,
+        clear=clear or None,
+    )
+    return await get_conn(Ph).send("SET_REFERENCE_IMAGE", payload, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_set_environment", "Set environment parameters"))
 async def physics_set_environment(
     gravityZ: float | None = None,
