@@ -893,6 +893,76 @@ async def physics_split_for_print(
     # is a MuJoCo run per joint; both are worker jobs measured in seconds.
     return await get_conn(Ph).send("SPLIT_FOR_PRINT", payload, timeout=300.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_timber_breakdown", (
+    "Break a Mesh body (a box or cabinet, or framed furniture such as a table) into wooden parts "
+    "cut on a saw: cut list, joinery, hardware, glue-up guide and optional CNC setups. "
+    "mode 'auto' | 'planks' | 'frame'. apply=True splits it into one scene body per part."
+)))
+async def physics_timber_breakdown(
+    body_id: str | None = None,
+    with_ids: list[str] | None = None,
+    mode: str = "auto",
+    joint_type: str | None = None,
+    hollow_interior: bool | None = None,
+    board_thickness_mm: float | None = None,
+    wall_thickness_mm: float | None = None,
+    max_board_width_mm: float | None = None,
+    max_board_length_mm: float | None = None,
+    finger_width_mm: float | None = None,
+    dowel_dia_mm: float | None = None,
+    dowel_length_mm: float | None = None,
+    joint_mode: str | None = None,
+    tenon_length_mm: float | None = None,
+    shoulder_mm: float | None = None,
+    tenon_corner_fit: str | None = None,
+    tenon_cut_method: str | None = None,
+    edge_profile: str | None = None,
+    edge_radius_mm: float | None = None,
+    tabletop_clips: bool | None = None,
+    cnc_bed_mm: list[float] | None = None,
+    stock_length_mm: float | None = None,
+    clearance_mm: float | None = None,
+    apply: bool = False,
+    placement: str = "replace",
+    include_gcode: bool = False,
+) -> Any:
+    payload = compact_dict(
+        bodyId=body_id,
+        withIds=with_ids,
+        # 'auto' is the bridge's behaviour when no mode is given.
+        mode=None if mode == "auto" else mode,
+        jointType=joint_type,
+        hollowInterior=hollow_interior,
+        boardThicknessMm=board_thickness_mm,
+        wallThicknessMm=wall_thickness_mm,
+        maxBoardWidthMm=max_board_width_mm,
+        maxBoardLengthMm=max_board_length_mm,
+        fingerWidthMm=finger_width_mm,
+        dowelDiaMm=dowel_dia_mm,
+        dowelLengthMm=dowel_length_mm,
+        jointMode=joint_mode,
+        tenonLengthMm=tenon_length_mm,
+        shoulderMm=shoulder_mm,
+        tenonCornerFit=tenon_corner_fit,
+        tenonCutMethod=tenon_cut_method,
+        edgeProfile=edge_profile,
+        edgeRadiusMm=edge_radius_mm,
+        tabletopClips=tabletop_clips,
+        cncBedMm=cnc_bed_mm,
+        stockLengthMm=stock_length_mm,
+        clearanceMm=clearance_mm,
+        apply=apply or None,
+        placement=placement,
+    )
+    # Manifold booleans per joint on the tab's main thread: seconds for a table.
+    result = await get_conn(Ph).send("BREAKDOWN_JOINERY", payload, timeout=300.0)
+    # Each CNC setup carries its whole program; most callers want the plan.
+    if not include_gcode and isinstance(result, dict):
+        for setup in result.get("cncSetups") or []:
+            if isinstance(setup, dict):
+                setup.pop("gcode", None)
+    return result
+
 @mcp.tool(description=get_doc(physics_docs, "physics_export_machining", (
     "Export the current Mesh scene as a CNC machining program (G-code and setup sheets) for the "
     "given number of setups. Returns a summary, any warnings, and the list of files produced — "
