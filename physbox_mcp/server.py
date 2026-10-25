@@ -1110,6 +1110,10 @@ async def physics_add_simulation(
     background_mode: str | None = None,
     pour_direction: str | None = None,
     fill_mm: float | None = None,
+    dissolvable_liner: bool | None = None,
+    liner_skin_mm: float | None = None,
+    cast_material: str | None = None,
+    out_dir: str | None = None,
 ) -> Any:
     """Cut a relief, machining, laser, contour, mold, or mold cast job and add the result to the Mesh scene.
 
@@ -1130,6 +1134,10 @@ async def physics_add_simulation(
         trim_channels: For kind='mold_cast', whether to trim sprue/vent runner stubs
         pour_direction: For kind='mold_cast' with body_id: the side poured from, '+z', '-z', '+x', '-x', '+y', '-y' (default: the best side)
         fill_mm: For kind='mold_cast' with body_id: fill depth in mm (default: to the rim)
+        dissolvable_liner: For kind='mold': a PLA shell with a dissolvable PVA liner (two-material 3MF)
+        liner_skin_mm: PVA between the casting and the PLA, mm (default 1.2)
+        cast_material: 'epoxy' (default), 'polyurethane', 'silicone', 'wax'; water-based 'plaster', 'concrete', 'jesmonite' are refused with a liner
+        out_dir: Where to write a lined mold's 3MF
     """
     payload = compact_dict(
         kind=kind,
@@ -1159,9 +1167,20 @@ async def physics_add_simulation(
         bitDiaMm=bit_dia_mm,
         pourDirection=pour_direction,
         fillMm=fill_mm,
+        dissolvableLiner=dissolvable_liner,
+        linerSkinMm=liner_skin_mm,
+        castMaterial=cast_material,
+        includeFiles=True if out_dir is not None else None,
     )
     # Plans the job, then cuts it out of the stock on the tab's export worker.
-    return await get_conn(Ph).send("ADD_SIMULATION", payload, timeout=300.0)
+    result = await get_conn(Ph).send("ADD_SIMULATION", payload, timeout=300.0)
+    # A lined mold hands back its 3MF. The bytes go to disk, never to the agent;
+    # the rest of the reply stays as it was.
+    if isinstance(result, dict) and result.get("files"):
+        result["files"] = _deliver_export(
+            {"files": result["files"]}, out_dir
+        )["files"]
+    return result
 
 # ── PhysBox: Flux (Process) Tools ──────────────────────────────────────────────
 
@@ -2033,20 +2052,26 @@ async def physics_create_sculpt(
     base: str = "sphere",
     pos: list[float] | None = None,
     parent: str | None = None,
+    sizeMm: float | None = None,
 ) -> Any:
-    payload = compact_dict(name=name, base=base, pos=pos, parent=parent)
+    payload = compact_dict(name=name, base=base, pos=pos, parent=parent, sizeMm=sizeMm)
     return await get_conn(Ph).send("CREATE_SCULPT", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_set_sculpt_base", "Replace a sculpt's base shape"))
 async def physics_set_sculpt_base(id: str, base: str) -> Any:
     return await get_conn(Ph).send("SET_SCULPT_BASE", {"targetId": id, "base": base}, timeout=60.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_resize_sculpt", "Scale a sculpt body to a size"))
+async def physics_resize_sculpt(id: str, sizeMm: float) -> Any:
+    return await get_conn(Ph).send("RESIZE_SCULPT", {"targetId": id, "sizeMm": sizeMm}, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_sculpt", "Brush a sculpt body's surface"))
 async def physics_sculpt(
     id: str,
     at: list[Any] | None = None,
     brush: str = "draw",
-    radius: float = 0.04,
+    # None: the app picks a sixth of the body's longest side.
+    radius: float | None = None,
     strength: float = 0.5,
     invert: bool = False,
     symmetry: str | None = None,
@@ -2054,6 +2079,8 @@ async def physics_sculpt(
     dynamicTopology: bool | None = None,
     delta: list[float] | None = None,
     strokes: list[dict[str, Any]] | None = None,
+    depthMm: float | None = None,
+    hardness: float | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id,
@@ -2067,6 +2094,8 @@ async def physics_sculpt(
         dynamicTopology=dynamicTopology,
         delta=delta,
         strokes=strokes,
+        depthMm=depthMm,
+        hardness=hardness,
     )
     return await get_conn(Ph).send("SCULPT", payload, timeout=60.0)
 
@@ -2215,6 +2244,25 @@ async def physics_sculpt_cut(
     payload = compact_dict(targetId=id, polygon=polygon, direction=direction, mode=mode, cap=cap)
     return await get_conn(Ph).send("SCULPT_CUT", payload, timeout=90.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_sculpt_carve", "Carve a groove into a sculpt along a path, or add a tube of clay"))
+async def physics_sculpt_carve(
+    id: str,
+    path: list[Any],
+    widthMm: float,
+    depthMm: float | None = None,
+    profile: str | None = None,
+    symmetry: str | None = None,
+    fill: bool | None = None,
+    taper: float | None = None,
+    angleDeg: float | None = None,
+    mode: str | None = None,
+) -> Any:
+    payload = compact_dict(
+        targetId=id, path=path, widthMm=widthMm, depthMm=depthMm, profile=profile,
+        symmetry=symmetry, fill=fill, taper=taper, angleDeg=angleDeg, mode=mode,
+    )
+    return await get_conn(Ph).send("SCULPT_CARVE", payload, timeout=90.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_get_sculpt", "Return a sculpt body's mesh statistics"))
 async def physics_get_sculpt(id: str) -> Any:
     return await get_conn(Ph).send("GET_SCULPT", {"targetId": id})
@@ -2362,6 +2410,8 @@ async def physics_cut(
     cornerRadiusMm: float | None = None,
     floor: str | None = None,
     floorRadiusMm: float | None = None,
+    seal: str | None = None,
+    turned: bool | None = None,
     cuts: list[dict[str, Any]] | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -2370,9 +2420,29 @@ async def physics_cut(
         threadPitchMm=threadPitchMm, threadLeft=threadLeft, threadFitMm=threadFitMm,
         size=size, bore=bore, fitMm=fitMm,
         outline=outline, cornerRadiusMm=cornerRadiusMm, floor=floor, floorRadiusMm=floorRadiusMm,
+        seal=seal, turned=turned,
         cuts=cuts,
     )
     return await get_conn(Ph).send("BODY_CUT", payload, timeout=60.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_add_hardware", "Put a bought part in the scene: a bearing, screw, nut, shaft, O-ring, rail, runner, extrusion, spring or stepper"))
+async def physics_add_hardware(
+    kind: str | None = None,
+    size: str | None = None,
+    lengthMm: float | None = None,
+    washer: bool | None = None,
+    into: str | None = None,
+    group: str | None = None,
+    at: list[float] | None = None,
+    fixTo: str | None = None,
+    id: str | None = None,
+    between: list[str] | None = None,
+) -> Any:
+    payload = compact_dict(
+        kind=kind, size=size, lengthMm=lengthMm, washer=washer, into=into, group=group, at=at,
+        fixTo=fixTo, id=id, between=between,
+    )
+    return await get_conn(Ph).send("ADD_HARDWARE", payload, timeout=120.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_edges", "List a body's edges that can be rounded or bevelled"))
 async def physics_get_edges(id: str) -> Any:
