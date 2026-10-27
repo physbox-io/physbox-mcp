@@ -1133,21 +1133,47 @@ async def physics_add_simulation(
     hole_at_mm: list[float] | None = None,
     draft_deg: float | None = None,
     shrink_percent: float | None = None,
+    sheet_mode: str | None = None,
+    bend_radius_mm: float | None = None,
+    k_factor: float | None = None,
+    scale_factor: float | None = None,
+    tube_job: str | None = None,
+    pipe_standard_id: str | None = None,
+    cut_tube_od_mm: float | None = None,
+    cut_tube_wall_mm: float | None = None,
+    target_kind: str | None = None,
+    target_tube_od_mm: float | None = None,
+    angle_deg: float | None = None,
+    offset_mm: float | None = None,
+    clock_angle_deg: float | None = None,
+    joint_index: int | None = None,
+    points_mm: list[list[float]] | None = None,
+    wire_index: int | None = None,
+    wire_diameter_mm: float | None = None,
+    springback_factor: float | None = None,
+    with_ids: list[str] | None = None,
+    joint_mode: str | None = None,
+    cutter_dia_mm: float | None = None,
+    tenon_length_mm: float | None = None,
+    shoulder_mm: float | None = None,
     out_dir: str | None = None,
 ) -> Any:
-    """Cut a relief, machining, laser, contour, mold, or mold cast job and add the result to the Mesh scene.
+    """Cut a relief, machining, laser, contour, sheet, tube, timber, mold, or mold cast job and add the result to the Mesh scene.
 
     Supported kinds:
     - 'relief': Relief carve simulation
     - 'machining': Multi-sided solid machining simulation
     - 'laser': Laser cut / nested sheet parts
     - 'contour': Stacked contour sheet slice simulation
+    - 'sheet': A Sheet Unfold net folded back up along its own lines, measured against the model
+    - 'tube': A Tube & Wire output made up: tube_job 'frame' (cut list), 'cope' (template) or 'wire' (bend schedule)
+    - 'timber': A Timber Breakdown frame: mortising programs milled, tenons fitted into them
     - 'mold': Adds the generated 3D mold to the scene
     - 'mold_cast': Simulates what would be cast from a mold — either an existing mold body via `body_id`
       or a newly generated mold for the scene — and adds the cast body to the scene.
 
     Args:
-        kind: 'relief', 'machining', 'laser', 'contour', 'mold', or 'mold_cast'
+        kind: 'relief', 'machining', 'laser', 'contour', 'sheet', 'tube', 'timber', 'mold', or 'mold_cast'
         placement: 'beside' or 'over'
         body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
         master_id: For kind='mold', or 'mold_cast' without body_id: the part to mold, comma-separated for several (default: every body)
@@ -1163,6 +1189,12 @@ async def physics_add_simulation(
         dissolvable_liner: For kind='mold': a PLA shell with a dissolvable PVA liner (two-material 3MF)
         liner_skin_mm: PVA between the casting and the PLA, mm (default 1.2)
         cast_material: 'epoxy' (default), 'polyurethane', 'platinum' or 'tin' (silicone = platinum), 'wax', 'chocolate', 'water', 'plaster', 'concrete', 'jesmonite'; the water-based ones are refused with a liner, metals always. With body_id the reply adds the pour's weight in it
+        sheet_mode, bend_radius_mm, k_factor, scale_factor: For kind='sheet': 'papercraft' (default), 'sheet_metal' or 'soft_goods', and the bend the brake makes (material_thickness_mm is the sheet)
+        tube_job: For kind='tube': 'frame' (default), 'cope' or 'wire'
+        pipe_standard_id: For tube_job='frame': the pipe, default 'pvc_sch40_3_4'
+        cut_tube_od_mm, cut_tube_wall_mm, target_kind, target_tube_od_mm, angle_deg, offset_mm, clock_angle_deg: For tube_job='cope': the joint (default: the scene's, at joint_index)
+        points_mm, wire_index, wire_diameter_mm, springback_factor: For tube_job='wire': the path (default: the scene's wire at wire_index) and the wire (bend_radius_mm too)
+        with_ids, joint_mode, cutter_dia_mm, tenon_length_mm, shoulder_mm: For kind='timber', with body_id and clearance_mm: the parts and the joinery
         out_dir: Where to write a lined mold's 3MF
     """
     payload = compact_dict(
@@ -1204,6 +1236,29 @@ async def physics_add_simulation(
         holeAtMm=hole_at_mm,
         draftDeg=draft_deg,
         shrinkPercent=shrink_percent,
+        sheetMode=sheet_mode,
+        bendRadiusMm=bend_radius_mm,
+        kFactor=k_factor,
+        scaleFactor=scale_factor,
+        tubeJob=tube_job,
+        pipeStandardId=pipe_standard_id,
+        cutTubeOdMm=cut_tube_od_mm,
+        cutTubeWallMm=cut_tube_wall_mm,
+        targetKind=target_kind,
+        targetTubeOdMm=target_tube_od_mm,
+        angleDeg=angle_deg,
+        offsetMm=offset_mm,
+        clockAngleDeg=clock_angle_deg,
+        jointIndex=joint_index,
+        pointsMm=points_mm,
+        wireIndex=wire_index,
+        wireDiameterMm=wire_diameter_mm,
+        springbackFactor=springback_factor,
+        withIds=with_ids,
+        jointMode=joint_mode,
+        cutterDiaMm=cutter_dia_mm,
+        tenonLengthMm=tenon_length_mm,
+        shoulderMm=shoulder_mm,
         includeFiles=True if out_dir is not None else None,
     )
     # Plans the job, then cuts it out of the stock on the tab's export worker.
