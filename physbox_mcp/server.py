@@ -808,11 +808,17 @@ async def physics_export_cast(
     sprue_dia_mm: float = 0,
     riser_dia_mm: float = 0,
     add_riser: bool = True,
+    master_id: str | None = None,
+    draft_deg: float | None = None,
+    shrink_percent: float | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
         metal=metal,
         method=method,
+        masterId=master_id,
+        draftDeg=draft_deg,
+        shrinkPercent=shrink_percent,
         partingFromBaseMm=parting_from_base_mm,
         addGating=add_gating,
         sprueDiaMm=sprue_dia_mm,
@@ -828,7 +834,7 @@ async def physics_export_cast(
     return _deliver_export(result, out_dir)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_make_pour_box", (
-    "Make a printed pour box (base with a groove, sleeve, optional wick pin) for casting a silicone "
+    "Make a printed pour box (base with a groove, sleeve, optional hole through the silicone for a wick, a pour or a fixing) for casting a silicone "
     "mold of a master in the Mesh scene. Reports the fill line and the silicone in grams; apply=True "
     "adds the pieces to the scene; out_dir writes their STLs."
 )))
@@ -844,6 +850,9 @@ async def physics_make_pour_box(
     pin: bool | None = None,
     pin_dia_mm: float | None = None,
     silicone: str | None = None,
+    hole: str | None = None,
+    hole_dia_mm: float | None = None,
+    hole_at_mm: list[float] | None = None,
     apply: bool = False,
     out_dir: str | None = None,
 ) -> Any:
@@ -859,6 +868,9 @@ async def physics_make_pour_box(
         pin=pin,
         pinDiaMm=pin_dia_mm,
         silicone=silicone,
+        hole=hole,
+        holeDiaMm=hole_dia_mm,
+        holeAtMm=hole_at_mm,
         apply=apply or None,
         includeFiles=out_dir is not None,
     )
@@ -1113,6 +1125,14 @@ async def physics_add_simulation(
     dissolvable_liner: bool | None = None,
     liner_skin_mm: float | None = None,
     cast_material: str | None = None,
+    master_id: str | None = None,
+    method: str | None = None,
+    silicone: str | None = None,
+    hole: str | None = None,
+    hole_dia_mm: float | None = None,
+    hole_at_mm: list[float] | None = None,
+    draft_deg: float | None = None,
+    shrink_percent: float | None = None,
     out_dir: str | None = None,
 ) -> Any:
     """Cut a relief, machining, laser, contour, mold, or mold cast job and add the result to the Mesh scene.
@@ -1130,13 +1150,19 @@ async def physics_add_simulation(
         kind: 'relief', 'machining', 'laser', 'contour', 'mold', or 'mold_cast'
         placement: 'beside' or 'over'
         body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
+        master_id: For kind='mold', or 'mold_cast' without body_id: the part to mold, comma-separated for several (default: every body)
+        method: For kind='mold_cast', not with body_id: 'rigid' (default, a printed mold), 'silicone' (pour box, silicone poured, mold turned over and vented, material poured), 'sand' or 'lost-pla' (pattern in its flask, metal poured): the whole job to the finished piece
+        silicone: For method='silicone': the mold's silicone, 'platinum' (default) or 'tin'
+        hole, hole_dia_mm, hole_at_mm: For method='silicone': a hole through the silicone, as physics_make_pour_box takes them; 'pour' pours through it
+        draft_deg: For method 'sand' or 'lost-pla': draft on the printed pattern (default 2 for sand, 0 for lost PLA)
+        shrink_percent: For method 'sand' or 'lost-pla': the shrink allowance in place of the metal's own
         mold_type: 'auto' (default: simplest mold that keeps the part), 'clamshell' or 'open', for kind='mold' or 'mold_cast'
         trim_channels: For kind='mold_cast', whether to trim sprue/vent runner stubs
         pour_direction: For kind='mold_cast' with body_id: the side poured from, '+z', '-z', '+x', '-x', '+y', '-y' (default: the best side)
-        fill_mm: For kind='mold_cast' with body_id: fill depth in mm (default: to the rim)
+        fill_mm: For kind='mold_cast' with body_id: fill depth in mm (default: to the rim, or to the fill line of an upright pour box among the bodies)
         dissolvable_liner: For kind='mold': a PLA shell with a dissolvable PVA liner (two-material 3MF)
         liner_skin_mm: PVA between the casting and the PLA, mm (default 1.2)
-        cast_material: 'epoxy' (default), 'polyurethane', 'silicone', 'wax'; water-based 'plaster', 'concrete', 'jesmonite' are refused with a liner
+        cast_material: 'epoxy' (default), 'polyurethane', 'platinum' or 'tin' (silicone = platinum), 'wax', 'chocolate', 'water', 'plaster', 'concrete', 'jesmonite'; the water-based ones are refused with a liner, metals always. With body_id the reply adds the pour's weight in it
         out_dir: Where to write a lined mold's 3MF
     """
     payload = compact_dict(
@@ -1170,6 +1196,14 @@ async def physics_add_simulation(
         dissolvableLiner=dissolvable_liner,
         linerSkinMm=liner_skin_mm,
         castMaterial=cast_material,
+        masterId=master_id,
+        method=method,
+        silicone=silicone,
+        hole=hole,
+        holeDiaMm=hole_dia_mm,
+        holeAtMm=hole_at_mm,
+        draftDeg=draft_deg,
+        shrinkPercent=shrink_percent,
         includeFiles=True if out_dir is not None else None,
     )
     # Plans the job, then cuts it out of the stock on the tab's export worker.
