@@ -13,9 +13,13 @@ import base64
 import urllib.request
 import asyncio
 import threading
+import contextvars
+import functools
+import inspect
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from fastmcp import FastMCP
+from pydantic import Field
 try:
     from fastmcp import Image
 except ImportError:
@@ -260,17 +264,47 @@ class AppConnection:
         pass
 
     def active_session_id(self) -> str | None:
-        """The session `send` will talk to: the pinned one if it is still here,
-        otherwise the most recently connected. Returns None when no tab is open."""
-        if self.selected_session and self.selected_session in self.sessions:
-            return self.selected_session
+        """The session a command with no tab of its own goes to: the pinned one,
+        otherwise the most recently connected. None when there is no such tab —
+        including when the pinned tab is away, which `target_session` reports."""
         if self.selected_session:
-            # The pinned tab went away. Drop the pin rather than keep erroring, so
-            # the default rule takes over silently.
-            self.selected_session = None
+            return self.selected_session if self.selected_session in self.sessions else None
         if not self.sessions:
             return None
         return next(reversed(self.sessions))
+
+    def target_session(self, explicit: str | None = None) -> str:
+        """The session a command goes to, or an error saying why there is none.
+
+        A command may name its tab (the `session` argument every app tool takes),
+        which lets agents working side by side each drive their own tab without
+        fighting over one pin. Otherwise the pinned tab, otherwise the newest.
+
+        A pinned tab that is away is NOT replaced by another. It used to be: the
+        pin was dropped when the tab's socket closed, and a dev-server reload
+        closes it for a second or two, so the next command went to whichever tab
+        had connected last — often a person's own tab, whose scene it replaced.
+        A tab keeps its session id across a reload, so the pin picks up again
+        when it reconnects, and until then the command fails and says so."""
+        if explicit:
+            if explicit in self.sessions:
+                return explicit
+            open_ = ", ".join(self.sessions) or "none"
+            raise RuntimeError(
+                f"Tab '{explicit}' is not connected on port {self.port} (it may be reloading; retry in a few "
+                f"seconds). Open tabs: {open_}. Nothing was sent to any other tab."
+            )
+        if self.selected_session and self.selected_session not in self.sessions:
+            open_ = ", ".join(self.sessions) or "none"
+            raise RuntimeError(
+                f"The pinned tab '{self.selected_session}' on port {self.port} is not connected (reloading or "
+                f"closed). Nothing was sent to any other tab. Retry in a few seconds, or call use_session to pin "
+                f"another (open tabs: {open_}), or use_session with an empty session_id to unpin."
+            )
+        active = self.active_session_id()
+        if active is None:
+            raise RuntimeError(f"App on port {self.port} is not connected. Open the app in your browser!")
+        return active
 
     def add_session(self, session_id: str, ws, ws_loop, info: dict) -> None:
         now = _now_ms()
@@ -289,16 +323,14 @@ class AppConnection:
         self.connected = True
 
     def drop_session(self, session_id: str) -> None:
+        # The pin stays: see target_session.
         self.sessions.pop(session_id, None)
-        if self.selected_session == session_id:
-            self.selected_session = None
-        active = self.active_session_id()
-        if active is None:
+        if not self.sessions:
             self.connected = False
             self.ws = None
             self.ws_loop = None
         else:
-            entry = self.sessions[active]
+            entry = self.sessions[next(reversed(self.sessions))]
             self.ws = entry["ws"]
             self.ws_loop = entry["ws_loop"]
 
@@ -327,11 +359,7 @@ class AppConnection:
         global is_primary, peer_ws, peer_ws_loop
         
         if is_primary:
-            session_id = self.active_session_id()
-            if session_id is None:
-                raise RuntimeError(
-                    f"App on port {self.port} is not connected. Open the app in your browser!"
-                )
+            session_id = self.target_session(_session_override.get())
             entry = self.sessions[session_id]
             msg_id = "".join(random.choices(string.ascii_letters, k=8))
             loop = asyncio.get_running_loop()
@@ -374,6 +402,7 @@ class AppConnection:
                 "port": self.port,
                 "cmd": cmd,
                 "payload": payload,
+                "session": _session_override.get(),
             }
             asyncio.run_coroutine_threadsafe(peer_ws.send(_wire(forward_data)), peer_ws_loop)
             
@@ -426,6 +455,10 @@ def local_list_sessions() -> list[dict]:
 
 def local_use_session(port: int, session_id: str) -> dict:
     conn = _connections.get(int(port))
+    if not session_id:
+        if conn:
+            conn.selected_session = None
+        return {"port": int(port), "sessionId": None, "unpinned": True}
     known = list(conn.sessions.keys()) if conn else []
     if session_id not in known:
         raise RuntimeError(
@@ -548,12 +581,18 @@ async def ws_handler(ws):
                     continue
 
                 target_conn = get_conn(port) if port else None
-                target_session = target_conn.active_session_id() if target_conn else None
+                target_session = None
+                target_error = f"App on port {port} is not connected. Open the app in your browser!"
+                if target_conn:
+                    try:
+                        target_session = target_conn.target_session(msg.get("session"))
+                    except RuntimeError as e:
+                        target_error = str(e)
                 if target_session is None:
                     await ws.send(json.dumps({
                         "event": "PEER_RESULT",
                         "id": req_id,
-                        "error": f"App on port {port} is not connected. Open the app in your browser!"
+                        "error": target_error,
                     }))
                 else:
                     entry = target_conn.sessions[target_session]
@@ -715,6 +754,59 @@ mcp = FastMCP(
     ),
 )
 
+# ── A tab per command ─────────────────────────────────────────────────────────
+#
+# Every tool that talks to an app takes an optional `session`: the id of the tab
+# (from list_sessions) that this one command goes to. A pin is one setting for
+# everyone talking to the hub, so two agents each pinning their own tab took it
+# from each other between calls; naming the tab per command needs no shared
+# state at all. Added here, once, rather than to two hundred signatures: the
+# wrapper appends the parameter and puts its value where AppConnection.send
+# and the peer forward read it.
+
+_session_override: contextvars.ContextVar[str | None] = contextvars.ContextVar("session_override", default=None)
+
+_SESSION_PARAM = inspect.Parameter(
+    "session",
+    inspect.Parameter.KEYWORD_ONLY,
+    default=None,
+    annotation=Annotated[str | None, Field(description=(
+        "Optional. The id of the browser tab (from list_sessions) to send this command to, instead of the "
+        "pinned or most recent tab. Use it when more than one agent or person is working in the same app."
+    ))],
+)
+
+# Tools that never reach a tab, or that already name one.
+_NO_SESSION_PARAM = {"detect_apps", "list_sessions", "use_session"}
+
+_register_tool = mcp.tool
+
+def _tool_with_session(*args, **kwargs):
+    register = _register_tool(*args, **kwargs)
+
+    def decorate(fn):
+        if fn.__name__ in _NO_SESSION_PARAM or fn.__name__.startswith("physbox_") or not inspect.iscoroutinefunction(fn):
+            return register(fn)
+
+        @functools.wraps(fn)
+        async def with_session(*a, session: str | None = None, **kw):
+            token = _session_override.set(session or None)
+            try:
+                return await fn(*a, **kw)
+            finally:
+                _session_override.reset(token)
+
+        sig = inspect.signature(fn)
+        with_session.__signature__ = sig.replace(parameters=[*sig.parameters.values(), _SESSION_PARAM])
+        # functools.wraps points the signature back at fn; the schema must see the new one.
+        del with_session.__wrapped__
+        with_session.__annotations__ = {**fn.__annotations__, "session": _SESSION_PARAM.annotation}
+        return register(with_session)
+
+    return decorate
+
+mcp.tool = _tool_with_session
+
 # ── Universal Tools ───────────────────────────────────────────────────────────
 
 @mcp.tool()
@@ -758,7 +850,8 @@ async def detect_apps() -> list[dict]:
             row["note"] = (
                 f"{len(sessions)} browser tabs are open on port {app['port']} and none has been chosen; "
                 f"commands go to the most recent one ({selected}). "
-                "Call list_sessions to see them and use_session to pin one."
+                "Call list_sessions to see them, then use_session to pin one or pass its id as "
+                "`session` on each command."
             )
         results.append(row)
     return results
@@ -785,7 +878,8 @@ async def list_sessions() -> Any:
     "Pin one browser tab as the target for every subsequent command on that app's port, so work "
     "stays in one tab instead of following whichever tab connected last. port is the app port "
     "(5173 Flux, 5174 Volt, 5175 Mesh, 5176 Etch); session_id comes from list_sessions. The pin "
-    "clears itself if that tab closes, and selection falls back to the most recent tab."
+    "holds while that tab reloads: commands fail until it is back rather than going to another tab. "
+    "An empty session_id unpins. To drive one tab without a pin, pass session on each command."
 )))
 async def use_session(port: int, session_id: str) -> Any:
     return await send_session_control(USE_SESSION_CMD, {"port": port, "sessionId": session_id})
