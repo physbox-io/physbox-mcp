@@ -2594,7 +2594,8 @@ async def physics_add_hardware(
 ) -> Any:
     payload = compact_dict(
         kind=kind, size=size, lengthMm=lengthMm, washer=washer, into=into, group=group, at=at,
-        fixTo=fixTo, id=id, between=between,
+        # partId, not id: the envelope's request id would overwrite it.
+        fixTo=fixTo, partId=id, between=between,
     )
     return await get_conn(Ph).send("ADD_HARDWARE", payload, timeout=120.0)
 
