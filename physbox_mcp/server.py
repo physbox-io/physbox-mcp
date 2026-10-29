@@ -1446,8 +1446,41 @@ async def circuit_get_summary() -> Any:
     return await get_conn(C).send("GET_SUMMARY")
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_run_sim", "Run SPICE simulation"))
-async def circuit_run_sim() -> Any:
-    return await get_conn(C).send("RUN_SIM")
+async def circuit_run_sim(
+    analysis: str | None = None,
+    domain: str | None = None,
+    sourceNodeId: str | None = None,
+    outputNet: str | None = None,
+    fStart: float | None = None,
+    fStop: float | None = None,
+    pointsPerDecade: int | None = None,
+    nodeId: str | None = None,
+    param: str | None = None,
+    start: float | None = None,
+    stop: float | None = None,
+    steps: int | None = None,
+    scale: str | None = None,
+    values: list[float] | None = None,
+    valuesList: str | list[float] | None = None,
+) -> Any:
+    payload = compact_dict(
+        analysis=analysis,
+        domain=domain,
+        sourceNodeId=sourceNodeId,
+        outputNet=outputNet,
+        fStart=fStart,
+        fStop=fStop,
+        pointsPerDecade=pointsPerDecade,
+        nodeId=nodeId,
+        param=param,
+        start=start,
+        stop=stop,
+        steps=steps,
+        scale=scale,
+        values=values,
+        valuesList=valuesList,
+    )
+    return await get_conn(C).send("RUN_SIM", payload)
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_stop_sim", "Stop SPICE simulation"))
 async def circuit_stop_sim() -> Any:
