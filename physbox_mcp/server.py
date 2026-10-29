@@ -2219,7 +2219,9 @@ async def physics_set_sculpt_base(id: str, base: str) -> Any:
     return await get_conn(Ph).send("SET_SCULPT_BASE", {"targetId": id, "base": base}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_resize_sculpt", "Scale a sculpt body to a size"))
-async def physics_resize_sculpt(id: str, sizeMm: float) -> Any:
+async def physics_resize_sculpt(id: str, sizeMm: float | list[float | None]) -> Any:
+    # A number scales the longest side to it; [w, d, h] sets each axis, and a
+    # null in it leaves that axis as it is.
     return await get_conn(Ph).send("RESIZE_SCULPT", {"targetId": id, "sizeMm": sizeMm}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_sculpt", "Brush a sculpt body's surface"))
