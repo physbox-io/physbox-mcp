@@ -2602,6 +2602,29 @@ async def physics_add_hardware(
     )
     return await get_conn(Ph).send("ADD_HARDWARE", payload, timeout=120.0)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_build_mechanism", "Build a gear, gear pair, rack and pinion, GT2 belt drive, leadscrew, cam and follower or four-bar linkage into the scene"))
+async def physics_build_mechanism(
+    family: str,
+    origin: list[float] | None = None,
+    idPrefix: str | None = None,
+    actuate: bool | None = None,
+    speed: float | None = None,
+    torqueLimitNm: float | None = None,
+    arborId: str | None = None,
+    axialOffsetMm: float | None = None,
+    spec: dict[str, Any] | None = None,
+) -> Any:
+    # `spec` is the family's own fields (teeth, moduleMm, lengthMm, groundMm ...),
+    # sent at the top level where the builder reads them.
+    payload = {
+        **(spec or {}),
+        **compact_dict(
+            family=family, origin=origin, idPrefix=idPrefix, actuate=actuate, speed=speed,
+            torqueLimitNm=torqueLimitNm, arborId=arborId, axialOffsetMm=axialOffsetMm,
+        ),
+    }
+    return await get_conn(Ph).send("BUILD_MECHANISM", payload, timeout=120.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_get_edges", "List a body's edges that can be rounded or bevelled"))
 async def physics_get_edges(id: str) -> Any:
     return await get_conn(Ph).send("GET_EDGES", {"targetId": id}, timeout=60.0)
