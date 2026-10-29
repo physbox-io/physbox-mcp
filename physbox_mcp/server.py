@@ -1205,6 +1205,7 @@ async def physics_add_simulation(
     stock_thickness_mm: float | None = None,
     sides: int | None = None,
     setups: str | int | None = None,
+    stage: str | int | None = None,
     clearance_mm: float | None = None,
     tool_stickout_mm: float | None = None,
     tool_dia_mm: float | None = None,
@@ -1256,6 +1257,7 @@ async def physics_add_simulation(
     Args:
         kind: 'relief', 'machining', 'laser', 'contour', 'sheet', 'tube', 'timber', 'mold', or 'mold_cast'
         placement: 'beside' or 'over'
+        stage: For kind='machining': one step instead of the finished part, 0 the stock (pins bored), k the block after setups 1 to k stood as it is for setup k, or 'all' for every step not yet in the scene
         body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
         master_id: For kind='mold', or 'mold_cast' without body_id: the part to mold, comma-separated for several (default: every body)
         method: For kind='mold_cast', not with body_id: 'rigid' (default, a printed mold), 'silicone' (pour box, silicone poured, mold turned over and vented, material poured), 'sand' or 'lost-pla' (pattern in its flask, metal poured): the whole job to the finished piece
@@ -1295,6 +1297,7 @@ async def physics_add_simulation(
         stockThicknessMm=stock_thickness_mm,
         sides=sides,
         setups=setups,
+        stage=stage,
         clearanceMm=clearance_mm,
         toolStickoutMm=tool_stickout_mm,
         toolDiaMm=tool_dia_mm,
