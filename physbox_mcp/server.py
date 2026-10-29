@@ -2468,7 +2468,8 @@ async def physics_get_sculpt(id: str) -> Any:
 async def physics_create_lattice(
     name: str | None = None,
     pos: list[float] | None = None,
-    sizeMm: float = 40.0,
+    # None: a 40 mm box, or an empty cage when the first op is a revolve.
+    sizeMm: float | None = None,
     edit: bool = False,
     parent: str | None = None,
     empty: bool | None = None,
