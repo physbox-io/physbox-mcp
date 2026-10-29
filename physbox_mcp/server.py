@@ -1446,8 +1446,41 @@ async def circuit_get_summary() -> Any:
     return await get_conn(C).send("GET_SUMMARY")
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_run_sim", "Run SPICE simulation"))
-async def circuit_run_sim() -> Any:
-    return await get_conn(C).send("RUN_SIM")
+async def circuit_run_sim(
+    analysis: str | None = None,
+    domain: str | None = None,
+    sourceNodeId: str | None = None,
+    outputNet: str | None = None,
+    fStart: float | None = None,
+    fStop: float | None = None,
+    pointsPerDecade: int | None = None,
+    nodeId: str | None = None,
+    param: str | None = None,
+    start: float | None = None,
+    stop: float | None = None,
+    steps: int | None = None,
+    scale: str | None = None,
+    values: list[float] | None = None,
+    valuesList: str | list[float] | None = None,
+) -> Any:
+    payload = compact_dict(
+        analysis=analysis,
+        domain=domain,
+        sourceNodeId=sourceNodeId,
+        outputNet=outputNet,
+        fStart=fStart,
+        fStop=fStop,
+        pointsPerDecade=pointsPerDecade,
+        nodeId=nodeId,
+        param=param,
+        start=start,
+        stop=stop,
+        steps=steps,
+        scale=scale,
+        values=values,
+        valuesList=valuesList,
+    )
+    return await get_conn(C).send("RUN_SIM", payload)
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_stop_sim", "Stop SPICE simulation"))
 async def circuit_stop_sim() -> Any:
@@ -2603,6 +2636,29 @@ async def physics_add_hardware(
         fixTo=fixTo, partId=id, between=between,
     )
     return await get_conn(Ph).send("ADD_HARDWARE", payload, timeout=120.0)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_build_mechanism", "Build a gear, gear pair, rack and pinion, GT2 belt drive, leadscrew, cam and follower or four-bar linkage into the scene"))
+async def physics_build_mechanism(
+    family: str,
+    origin: list[float] | None = None,
+    idPrefix: str | None = None,
+    actuate: bool | None = None,
+    speed: float | None = None,
+    torqueLimitNm: float | None = None,
+    arborId: str | None = None,
+    axialOffsetMm: float | None = None,
+    spec: dict[str, Any] | None = None,
+) -> Any:
+    # `spec` is the family's own fields (teeth, moduleMm, lengthMm, groundMm ...),
+    # sent at the top level where the builder reads them.
+    payload = {
+        **(spec or {}),
+        **compact_dict(
+            family=family, origin=origin, idPrefix=idPrefix, actuate=actuate, speed=speed,
+            torqueLimitNm=torqueLimitNm, arborId=arborId, axialOffsetMm=axialOffsetMm,
+        ),
+    }
+    return await get_conn(Ph).send("BUILD_MECHANISM", payload, timeout=120.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_edges", "List a body's edges that can be rounded or bevelled"))
 async def physics_get_edges(id: str) -> Any:
