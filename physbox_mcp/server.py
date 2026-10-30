@@ -927,6 +927,30 @@ async def physics_export_cast(
     result = await get_conn(Ph).send("EXPORT_CAST", payload, timeout=180.0)
     return _deliver_export(result, out_dir)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_export_print", (
+    "Export the Mesh scene, or the bodies in ids, as an STL or 3MF print file at true size in mm. "
+    "Returns each part's size and the files produced — NOT their contents. Pass out_dir to get the "
+    "files: each is written there and the returned path tells you where."
+)))
+async def physics_export_print(
+    ids: list[str] | None = None,
+    format: str = "stl",
+    separate: bool = False,
+    plate: bool | None = None,
+    out_dir: str | None = None,
+) -> Any:
+    payload = compact_dict(
+        ids=ids,
+        format=format,
+        separate=separate,
+        plate=plate,
+        includeFiles=out_dir is not None,
+    )
+    # Built from the scene graph rather than the canvas, but a scene of
+    # patterned or boolean parts is still real geometry work.
+    result = await get_conn(Ph).send("EXPORT_PRINT", payload, timeout=120.0)
+    return _deliver_export(result, out_dir)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_make_pour_box", (
     "Make a printed pour box (base with a groove, sleeve, optional hole through the silicone for a wick, a pour or a fixing) for casting a silicone "
     "mold of a master in the Mesh scene. Reports the fill line and the silicone in grams; apply=True "
