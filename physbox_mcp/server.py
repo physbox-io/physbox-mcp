@@ -2138,8 +2138,8 @@ async def physics_get_objects() -> Any:
     return await get_conn(Ph).send("GET_OBJECTS")
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_object", "Return single object by ID"))
-async def physics_get_object(id: str) -> Any:
-    return await get_conn(Ph).send("GET_OBJECT", {"targetId": id})
+async def physics_get_object(id: str, full: bool = False) -> Any:
+    return await get_conn(Ph).send("GET_OBJECT", {"targetId": id, "full": full})
 
 @mcp.tool(description=get_doc(physics_docs, "physics_update_object", "Update single object by ID"))
 async def physics_update_object(id: str, updates: dict) -> Any:
