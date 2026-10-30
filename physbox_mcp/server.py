@@ -381,7 +381,7 @@ class AppConnection:
             except asyncio.TimeoutError:
                 self.pending.pop(msg_id, None)
                 self.pending_session.pop(msg_id, None)
-                raise RuntimeError(f'Timeout waiting for "{cmd}" response ({timeout}s)')
+                raise command_timeout_error(cmd, timeout)
         else:
             # Only the hub link is checked here. Whether a tab is open is the
             # primary's to say — it answers a forward for a missing tab with a
@@ -410,7 +410,25 @@ class AppConnection:
                 return await asyncio.wait_for(fut, timeout=timeout)
             except asyncio.TimeoutError:
                 peer_local_pending.pop(msg_id, None)
-                raise RuntimeError(f'Timeout waiting for "{cmd}" response ({timeout}s)')
+                raise command_timeout_error(cmd, timeout)
+
+def command_timeout_error(cmd: str, timeout: float) -> RuntimeError:
+    """What a caller is told when an app command gets no reply in time.
+
+    The command has already been handed to the app, and the app does not stop
+    working on it because this side stopped waiting: a slow build carries on and
+    lands a few seconds later. Reported as a bare "Timeout", an agent took it to
+    mean nothing had happened and sent the command again, and the scene was
+    built twice. So the message says the command may have run, and how to find
+    out before retrying.
+    """
+    return RuntimeError(
+        f'Timeout waiting for "{cmd}" response ({timeout}s). '
+        "The command was delivered and MAY STILL HAVE RUN, or may still be running in the app: "
+        "a timeout does not cancel it. Do not simply retry. First check the app's state "
+        "(e.g. physics_get_scene_summary or physics_get_objects in Mesh, or the app's get_state / "
+        "get_summary tool) to see whether it took effect, and retry only if it did not."
+    )
 
 _connections: dict[int, AppConnection] = {}
 
