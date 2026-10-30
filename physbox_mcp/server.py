@@ -304,7 +304,7 @@ class AppConnection:
             except asyncio.TimeoutError:
                 self.pending.pop(msg_id, None)
                 self.pending_session.pop(msg_id, None)
-                raise RuntimeError(f'Timeout waiting for "{cmd}" response ({timeout}s)')
+                raise command_timeout_error(cmd, timeout)
         else:
             # Only the hub link is checked here. Whether a tab is open is the
             # primary's to say — it answers a forward for a missing tab with a
@@ -333,7 +333,25 @@ class AppConnection:
                 return await asyncio.wait_for(fut, timeout=timeout)
             except asyncio.TimeoutError:
                 peer_local_pending.pop(msg_id, None)
-                raise RuntimeError(f'Timeout waiting for "{cmd}" response ({timeout}s)')
+                raise command_timeout_error(cmd, timeout)
+
+def command_timeout_error(cmd: str, timeout: float) -> RuntimeError:
+    """What a caller is told when an app command gets no reply in time.
+
+    The command has already been handed to the app, and the app does not stop
+    working on it because this side stopped waiting: a slow build carries on and
+    lands a few seconds later. Reported as a bare "Timeout", an agent took it to
+    mean nothing had happened and sent the command again, and the scene was
+    built twice. So the message says the command may have run, and how to find
+    out before retrying.
+    """
+    return RuntimeError(
+        f'Timeout waiting for "{cmd}" response ({timeout}s). '
+        "The command was delivered and MAY STILL HAVE RUN, or may still be running in the app: "
+        "a timeout does not cancel it. Do not simply retry. First check the app's state "
+        "(e.g. physics_get_scene_summary or physics_get_objects in Mesh, or the app's get_state / "
+        "get_summary tool) to see whether it took effect, and retry only if it did not."
+    )
 
 _connections: dict[int, AppConnection] = {}
 
@@ -1960,7 +1978,7 @@ async def physics_set_environment(
     return await get_conn(Ph).send("SET_ENVIRONMENT", payload)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_update_scene", "Replace scene graph"))
-async def physics_update_scene(sceneGraph: list[Any]) -> Any:
+async def physics_update_scene(sceneGraph: list[Any] | dict[str, Any]) -> Any:
     return await get_conn(Ph).send("UPDATE_SCENE", {"sceneGraph": sceneGraph}, timeout=60.0)
 
 def _local_path(path: str) -> Path:
@@ -2199,7 +2217,9 @@ async def physics_set_sculpt_base(id: str, base: str) -> Any:
     return await get_conn(Ph).send("SET_SCULPT_BASE", {"targetId": id, "base": base}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_resize_sculpt", "Scale a sculpt body to a size"))
-async def physics_resize_sculpt(id: str, sizeMm: float) -> Any:
+async def physics_resize_sculpt(id: str, sizeMm: float | list[float | None]) -> Any:
+    # A number scales the longest side to it; [w, d, h] sets each axis, and a
+    # null in it leaves that axis as it is.
     return await get_conn(Ph).send("RESIZE_SCULPT", {"targetId": id, "sizeMm": sizeMm}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_sculpt", "Brush a sculpt body's surface"))
