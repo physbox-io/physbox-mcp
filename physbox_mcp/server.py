@@ -937,6 +937,7 @@ async def physics_export_print(
     format: str = "stl",
     separate: bool = False,
     plate: bool | None = None,
+    filaments: int | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -944,6 +945,7 @@ async def physics_export_print(
         format=format,
         separate=separate,
         plate=plate,
+        filaments=filaments,
         includeFiles=out_dir is not None,
     )
     # Built from the scene graph rather than the canvas, but a scene of
