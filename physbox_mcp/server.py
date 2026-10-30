@@ -1194,6 +1194,7 @@ async def physics_add_simulation(
     hole_dia_mm: float | None = None,
     hole_at_mm: list[float] | None = None,
     draft_deg: float | None = None,
+    draft_mode: str | None = None,
     shrink_percent: float | None = None,
     sheet_mode: str | None = None,
     bend_radius_mm: float | None = None,
@@ -1230,7 +1231,8 @@ async def physics_add_simulation(
         method: For kind='mold_cast', not with body_id: 'rigid' (default, a printed mold), 'silicone' (pour box, silicone poured, mold turned over and vented, material poured), 'sand' or 'lost-pla' (pattern in its flask, metal poured): the whole job to the finished piece
         silicone: For method='silicone': the mold's silicone, 'platinum' (default) or 'tin'
         hole, hole_dia_mm, hole_at_mm: For method='silicone': a hole through the silicone, as physics_make_pour_box takes them; 'pour' pours through it
-        draft_deg: For method 'sand' or 'lost-pla': draft on the printed pattern (default 2 for sand, 0 for lost PLA)
+        draft_deg: For method 'sand' or 'lost-pla': draft on the printed pattern (default 2 for sand, 0 for lost PLA). For kind='mold' and the rigid mold_cast: draft on the cavity walls (default the Mold dialog's, else 0)
+        draft_mode: For the rigid mold: 'remove' (default: the opening keeps its size, the casting loses the taper), 'add' (the bottom keeps its size, the casting gains it) or 'centre' (each wall pivots at mid-height)
         shrink_percent: For method 'sand' or 'lost-pla': the shrink allowance in place of the metal's own
         mold_type: 'auto' (default: simplest mold that keeps the part), 'clamshell' or 'open', for kind='mold' or 'mold_cast'
         trim_channels: For kind='mold_cast', whether to trim sprue/vent runner stubs
@@ -1283,6 +1285,7 @@ async def physics_add_simulation(
         holeDiaMm=hole_dia_mm,
         holeAtMm=hole_at_mm,
         draftDeg=draft_deg,
+        draftMode=draft_mode,
         shrinkPercent=shrink_percent,
         sheetMode=sheet_mode,
         bendRadiusMm=bend_radius_mm,
@@ -2105,8 +2108,14 @@ async def physics_get_objects() -> Any:
     return await get_conn(Ph).send("GET_OBJECTS")
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_object", "Return single object by ID"))
-async def physics_get_object(id: str, full: bool = False) -> Any:
-    return await get_conn(Ph).send("GET_OBJECT", {"targetId": id, "full": full})
+async def physics_get_object(
+    id: str,
+    full: bool = False,
+    geom: str | None = None,
+    offset: int | None = None,
+    limit: int | None = None,
+) -> Any:
+    return await get_conn(Ph).send("GET_OBJECT", compact_dict(targetId=id, full=full, geom=geom, offset=offset, limit=limit))
 
 @mcp.tool(description=get_doc(physics_docs, "physics_update_object", "Update single object by ID"))
 async def physics_update_object(id: str, updates: dict) -> Any:
