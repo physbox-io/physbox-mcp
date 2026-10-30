@@ -2013,7 +2013,7 @@ async def physics_set_environment(
     return await get_conn(Ph).send("SET_ENVIRONMENT", payload)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_update_scene", "Replace scene graph"))
-async def physics_update_scene(sceneGraph: list[Any]) -> Any:
+async def physics_update_scene(sceneGraph: list[Any] | dict[str, Any]) -> Any:
     return await get_conn(Ph).send("UPDATE_SCENE", {"sceneGraph": sceneGraph}, timeout=60.0)
 
 def _local_path(path: str) -> Path:
