@@ -27,6 +27,13 @@ except ImportError:
 import websockets
 
 from . import cloud
+from .docs import (
+    APP_REPO_DIR,
+    get_doc,
+    get_reference_docs,
+    get_reference_section,
+    load_mcp_docs,
+)
 
 # ── Configuration & Constants ──────────────────────────────────────────────────
 
@@ -120,95 +127,11 @@ def _deliver_export(result: Any, out_dir: str | None) -> dict:
         )
     return delivered
 
-# Where an app's own docs live, when the app is checked out beside us. The key
-# is the MCP's app id; the value is the repo directory, which is not always the
-# same word — Mesh's tools are all `physics_*`.
-APP_REPO_DIR = {"physics": "mesh", "circuit": "volt"}
-
-def load_mcp_docs(app_id: str) -> dict:
-    """
-    An app's agent-facing documentation, preferring the app's own copy.
-
-    The bundled copy under `mcp-docs/` is a *fallback* for an installed server
-    with no app checkout, and it is last for that reason. It used to sit second,
-    ahead of the app's own file, which meant a developer editing the app's
-    `mcp-docs.json` — the thing both apps' CLAUDE.md tells them to edit — was
-    editing a file the server then ignored. The two drifted for months and
-    nothing said so, because a tool whose docs are missing falls back to the
-    inline description in `get_doc` and keeps working.
-    """
-    current_dir = Path(__file__).parent.resolve()
-    repo = APP_REPO_DIR.get(app_id, app_id)
-    possible_paths = [
-        current_dir / ".." / ".." / repo / "mcp-docs.json",
-        Path.home() / repo / "mcp-docs.json",
-        current_dir / "mcp-docs" / f"{app_id}.json",
-    ]
-    for path in possible_paths:
-        try:
-            if path.exists():
-                with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception as e:
-            print(f"Error reading docs for {app_id} from {path}: {e}", file=sys.stderr)
-    return {}
-
 physics_docs = load_mcp_docs("physics")
 process_docs = load_mcp_docs("process")
 circuit_docs = load_mcp_docs("circuit")
 etch_docs    = load_mcp_docs("etch")
 cloud_docs   = load_mcp_docs("cloud")
-
-def get_reference_docs(docs: dict) -> dict:
-    """Everything in an app's mcp-docs.json EXCEPT `tools` (each tool's text is
-    already surfaced via its own @mcp.tool description, so repeating it here
-    would just be dead weight). This is what *_get_schema returns.
-
-    Before this, *_get_schema returned only the `schema` key's contents (as
-    the top-level result), which silently dropped `gotchas`/`overview`/
-    `workflow`/`examples` even when a doc file had them (mcp-docs.json's
-    physics/circuit docs both do, physics alone has 17 `gotchas` entries) —
-    no MCP tool ever returned those keys, so an agent had no way to see that
-    guidance short of reading the raw JSON file off disk, which nothing
-    prompts it to do.
-
-    `schema`'s own fields (geomTypes, nodeFields, etc.) are kept flattened at
-    the top level, matching the pre-existing response shape exactly (callers
-    already do e.g. result["geomTypes"]) — the other doc sections are added
-    as sibling keys alongside them, so this is purely additive.
-    """
-    schema_fields = docs.get("schema", {})
-    extra_sections = {k: v for k, v in docs.items() if k not in ("tools", "schema")}
-    return {**schema_fields, **extra_sections}
-
-def get_reference_section(docs: dict, section: str | None) -> dict:
-    """One part of get_reference_docs, or an index of them.
-
-    Mesh's reference runs to about 75 KB, more than an agent can read in one
-    tool result, so the bare call returns the overview and workflow plus a
-    list of every section with its size, and `section` fetches one ("all"
-    gives the whole thing as before). Sections are the flattened schema fields
-    (geomTypes, nodeFields, openScadNotes ...) and the top-level ones
-    (gotchas, examples, machining ...).
-    """
-    full = get_reference_docs(docs)
-    if section == "all":
-        return full
-    if section:
-        if section in full:
-            return {section: full[section]}
-        return {"error": f"No section {section!r}.", "sections": sorted(full)}
-    sizes = {k: len(json.dumps(v, ensure_ascii=False)) for k, v in full.items()}
-    return {
-        "overview": full.get("overview"),
-        "workflow": full.get("workflow"),
-        "sections": dict(sorted(sizes.items())),
-        "hint": "Call again with section=<name> for one section (sizes are in characters), or section='all' for everything.",
-    }
-
-def get_doc(docs: dict, tool_name: str, fallback: str = "") -> str:
-    """Extract tool description string from app documentation with fallback."""
-    return docs.get("tools", {}).get(tool_name, fallback)
 
 # ── Multi-Client Relay & WebSocket Hub State ──────────────────────────────────
 

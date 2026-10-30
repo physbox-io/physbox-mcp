@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from physbox_mcp.docs import get_doc, get_reference_section
+
 ROOT = Path(__file__).resolve().parent.parent
 SERVER = ROOT / "physbox_mcp" / "server.py"
 BUNDLED = ROOT / "physbox_mcp" / "mcp-docs"
@@ -101,7 +103,12 @@ def test_bundled_copy_matches_the_app_when_it_is_checked_out(app_id, repo):
     one a reader happens to open is a coin flip, which is exactly how seven
     tools ended up documented in one file and not the other.
     """
-    app_file = Path.home() / repo / "mcp-docs.json"
+    wt_file = (
+        Path.home() / repo / ".claude" / "worktrees" / ROOT.name / "mcp-docs.json"
+        if ".claude/worktrees/" in ROOT.as_posix()
+        else None
+    )
+    app_file = wt_file if (wt_file and wt_file.exists()) else Path.home() / repo / "mcp-docs.json"
     if not app_file.exists():
         pytest.skip(f"{repo} is not checked out beside this server")
 
@@ -118,3 +125,53 @@ def test_bundled_copy_matches_the_app_when_it_is_checked_out(app_id, repo):
         f"{app_id}: the app documents tools the bundled copy does not: "
         f"{sorted(app_tools - our_tools)}"
     )
+
+
+def test_hierarchical_tool_docs_and_sections():
+    """
+    Every tool's inline @mcp.tool description stays concise, and every
+    advertised `tools.<tool>.<subtopic>` and schema subsection resolves via
+    `get_reference_section`.
+    """
+    docs = bundled("physics")
+    tools = docs.get("tools", {})
+    assert tools
+
+    for tool_name, entry in tools.items():
+        rendered = get_doc(docs, tool_name)
+        assert isinstance(rendered, str) and rendered.strip(), f"{tool_name} rendered empty"
+        assert len(rendered) <= 1700, (
+            f"{tool_name} inline description is {len(rendered)} chars (> 1700); "
+            f"split detailed modes into details={{...}}"
+        )
+        if isinstance(entry, dict):
+            assert "summary" in entry and isinstance(entry["summary"], str)
+            details = entry.get("details")
+            assert isinstance(details, dict) and details, f"{tool_name} dict has no details"
+            for subtopic, subtext in details.items():
+                assert f'"tools.{tool_name}.{subtopic}"' in rendered
+                res = get_reference_section(docs, f"tools.{tool_name}.{subtopic}")
+                assert res == {f"tools.{tool_name}.{subtopic}": subtext}
+                short_res = get_reference_section(docs, f"{tool_name}.{subtopic}")
+                assert short_res == {f"tools.{tool_name}.{subtopic}": subtext}
+
+    index = get_reference_section(docs, None)
+    assert "overview" in index and "workflow" in index
+    assert isinstance(index.get("coreGotchas"), list) and len(index["coreGotchas"]) >= 5
+    assert "sections" in index and "subsections" in index
+
+    gotchas_top = get_reference_section(docs, "gotchas")
+    assert "gotchas.core" in gotchas_top and "subsections" in gotchas_top
+    for sub_key in gotchas_top["subsections"]:
+        sub_res = get_reference_section(docs, sub_key)
+        assert sub_key in sub_res and isinstance(sub_res[sub_key], list)
+    gotchas_all = get_reference_section(docs, "gotchas.all")
+    assert "gotchas" in gotchas_all and "collision" in gotchas_all["gotchas"]
+
+    nf_top = get_reference_section(docs, "nodeFields")
+    assert "nodeFields.core" in nf_top and "subsections" in nf_top
+    nf_features = get_reference_section(docs, "nodeFields.features")
+    assert "cuts" in nf_features["nodeFields.features"]
+    nf_cuts = get_reference_section(docs, "nodeFields.cuts")
+    assert "nodeFields.cuts" in nf_cuts and "DeclarativeCut" in nf_cuts["nodeFields.cuts"]
+
