@@ -58,4 +58,7 @@ def test_every_app_command_wait_reports_it():
 
 def test_the_bundled_physics_docs_tell_agents_the_same():
     docs = json.loads(BUNDLED_PHYSICS.read_text(encoding="utf-8"))
-    assert any("timed out" in g.lower() and "may still have run" in g.lower() for g in docs["gotchas"])
+    gotchas = docs["gotchas"]
+    # Grouped by topic ({"core": [...], "collision": [...]}) or one flat list.
+    every = [g for group in gotchas.values() for g in group] if isinstance(gotchas, dict) else gotchas
+    assert any("timed out" in g.lower() and "may still have run" in g.lower() for g in every)
