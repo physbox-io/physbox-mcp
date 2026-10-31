@@ -2249,9 +2249,23 @@ async def physics_set_sculpt_base(id: str, base: str) -> Any:
     return await get_conn(Ph).send("SET_SCULPT_BASE", {"targetId": id, "base": base}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_resize_sculpt", "Scale a sculpt body to a size"))
-async def physics_resize_sculpt(id: str, sizeMm: float | list[float | None]) -> Any:
+async def physics_resize_sculpt(
+    id: str,
+    sizeMm: float | list[float | None] | None = None,
+    widthMm: float | None = None,
+    depthMm: float | None = None,
+    heightMm: float | None = None,
+) -> Any:
     # A number scales the longest side to it; [w, d, h] sets each axis, and a
-    # null in it leaves that axis as it is.
+    # null in it leaves that axis as it is. widthMm/depthMm/heightMm are the
+    # same per-axis sizes as plain numbers, for clients that cannot send a
+    # value that is either a number or a list.
+    if widthMm is not None or depthMm is not None or heightMm is not None:
+        if sizeMm is not None:
+            raise ValueError("Give sizeMm, or widthMm/depthMm/heightMm, not both.")
+        sizeMm = [widthMm, depthMm, heightMm]
+    if sizeMm is None:
+        raise ValueError("Give sizeMm, or one or more of widthMm, depthMm, heightMm.")
     return await get_conn(Ph).send("RESIZE_SCULPT", {"targetId": id, "sizeMm": sizeMm}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_sculpt", "Brush a sculpt body's surface"))
