@@ -879,6 +879,8 @@ async def physics_export_print(
     separate: bool = False,
     plate: bool | None = None,
     filaments: int | None = None,
+    bed_mm: list[float] | None = None,
+    margin_mm: float | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -887,6 +889,8 @@ async def physics_export_print(
         separate=separate,
         plate=plate,
         filaments=filaments,
+        bedMm=bed_mm,
+        marginMm=margin_mm,
         includeFiles=out_dir is not None,
     )
     # Built from the scene graph rather than the canvas, but a scene of
@@ -984,8 +988,11 @@ async def physics_split_for_print(
     clearance_mm: float | None = None,
     min_wall_mm: float | None = None,
     margin_mm: float | None = None,
+    max_sections: int | None = None,
     test_assembly: bool = False,
     apply: bool = False,
+    placement: str | None = None,
+    center_origin: bool = False,
 ) -> Any:
     payload = compact_dict(
         bodyId=body_id,
@@ -997,8 +1004,11 @@ async def physics_split_for_print(
         clearanceMm=clearance_mm,
         minWallMm=min_wall_mm,
         marginMm=margin_mm,
+        maxSections=max_sections,
         testAssembly=test_assembly or None,
         apply=apply or None,
+        placement=placement,
+        centerOrigin=center_origin or None,
     )
     # The search builds hundreds of solids for a big part, and an assembly test
     # is a MuJoCo run per joint; both are worker jobs measured in seconds.
