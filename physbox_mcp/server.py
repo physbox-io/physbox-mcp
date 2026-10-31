@@ -2145,10 +2145,12 @@ async def physics_paint(
     flow: float = 1.0,
     erase: bool = False,
     strokes: list[dict[str, Any]] | None = None,
+    line: bool | None = None,
+    hardness: float | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id, at=at, rgba=rgba, radius=radius, geomName=geomName,
-        flow=flow, erase=erase, strokes=strokes,
+        flow=flow, erase=erase, strokes=strokes, line=line, hardness=hardness,
     )
     return await get_conn(Ph).send("PAINT", payload, timeout=60.0)
 
@@ -2434,10 +2436,13 @@ async def physics_sculpt_carve(
     taper: float | None = None,
     angleDeg: float | None = None,
     mode: str | None = None,
+    thicknessMm: float | None = None,
+    flatAxis: str | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id, path=path, widthMm=widthMm, depthMm=depthMm, profile=profile,
         symmetry=symmetry, fill=fill, taper=taper, angleDeg=angleDeg, mode=mode,
+        thicknessMm=thicknessMm, flatAxis=flatAxis,
     )
     return await get_conn(Ph).send("SCULPT_CARVE", payload, timeout=90.0)
 
