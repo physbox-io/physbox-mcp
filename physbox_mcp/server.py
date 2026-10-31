@@ -2059,8 +2059,13 @@ async def physics_set_camera(
     return await get_conn(Ph).send("SET_CAMERA", payload)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_screenshot", "Capture current rendered frame of 3D viewport as a PNG image."))
-async def physics_get_screenshot(show_colliders: bool | None = None) -> Any:
-    result = await get_conn(Ph).send("SCREENSHOT", compact_dict(showColliders=show_colliders))
+async def physics_get_screenshot(
+    show_colliders: bool | None = None,
+    show_edges: bool | None = None,
+    wireframe: bool | None = None,
+) -> Any:
+    result = await get_conn(Ph).send("SCREENSHOT", compact_dict(
+        showColliders=show_colliders, showEdges=show_edges, wireframe=wireframe))
     if not isinstance(result, dict) or not result.get("ok"):
         error = result.get("error") if isinstance(result, dict) else "Unknown error"
         raise RuntimeError(f"Screenshot failed: {error}")
@@ -2068,7 +2073,11 @@ async def physics_get_screenshot(show_colliders: bool | None = None) -> Any:
     if "," not in data_url:
         raise ValueError("Invalid image data URL returned from simulator")
     b64 = data_url.split(",", 1)[1]
-    return Image(data=base64.b64decode(b64), format="png")
+    image = Image(data=base64.b64decode(b64), format="png")
+    # The note says which view modes drew the frame (the Edges view's ink
+    # lines read as specks on fine detail); an older app sends none.
+    note = result.get("note")
+    return [image, note] if note else image
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_schema", "Return PhysBox: Mesh schema"))
 async def physics_get_schema(section: str | None = None) -> Any:
