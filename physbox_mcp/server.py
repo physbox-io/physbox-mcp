@@ -1087,6 +1087,30 @@ async def physics_timber_breakdown(
                 setup.pop("gcode", None)
     return result
 
+@mcp.tool(description=get_doc(physics_docs, "physics_build_brickwork", (
+    "Lay a Mesh body (or the whole scene) in brick, course by course: bricks to buy, cuts, mortar "
+    "and lintels. standard_id 'uk' | 'us_modular' | 'eu_nf' | 'au' | 'mini_12'; bond 'stretcher' | "
+    "'english' | 'flemish' | 'stack'; placement 'beside' | 'replace' | 'none' (count only)."
+)))
+async def physics_build_brickwork(
+    body_id: str | None = None,
+    standard_id: str | None = None,
+    bond: str | None = None,
+    joint_mm: float | None = None,
+    wastage_pct: float | None = None,
+    placement: str = "beside",
+) -> Any:
+    payload = compact_dict(
+        bodyId=body_id,
+        standardId=standard_id,
+        bond=bond,
+        jointMm=joint_mm,
+        wastagePct=wastage_pct,
+        placement=placement,
+    )
+    # Laid in a worker; a house is seconds, and settling thousands of bricks into the scene more.
+    return await get_conn(Ph).send("BUILD_BRICKWORK", payload, timeout=180.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_export_machining", (
     "Export the current Mesh scene as a CNC machining program (G-code and setup sheets) for the "
     "given number of setups. Returns a summary, any warnings, and the list of files produced — "
