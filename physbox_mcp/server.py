@@ -1340,7 +1340,7 @@ async def physics_add_simulation(
         pin_dia_mm, pin_height_mm, pin_tolerance_mm: For a clamshell: the registration pins (default 6, 4, 0.25)
         include_sprue, sprue_top_dia_mm, sprue_bottom_dia_mm, include_vents, vent_dia_mm, include_pry_notches: For the rigid mold: the pour sprue (default on, 8 to 4 mm), air vents (on, 1.5 mm) and pry notches (on). The reply's `features` says where each is
         liner_skin_mm: Liner between the casting and the shell, mm (default 1.2)
-        liner_material: The lined mold's filaments: 'pla_pva' (default), 'pla_bvoh' (dissolves faster), 'petg_pva' or 'abs_hips' (dissolves in d-limonene, so water-based casts can go in)
+        liner_material: The lined mold's filaments: 'pla_pva' (default), 'pla_bvoh' (dissolves faster), 'petg_pva', 'abs_hips' (d-limonene) or 'pla_pvb' (isopropyl alcohol); the last two take water-based casts
         cast_material: 'epoxy' (default), 'polyurethane', 'platinum' or 'tin' (silicone = platinum), 'wax', 'chocolate', 'water', 'plaster', 'concrete', 'jesmonite'; the water-based ones are refused with a liner, metals always. With body_id the reply adds the pour's weight in it
         sheet_mode, bend_radius_mm, k_factor, scale_factor: For kind='sheet': 'papercraft' (default), 'sheet_metal' or 'soft_goods', and the bend the brake makes (material_thickness_mm is the sheet)
         pipe_standard_id: For kind='tube': the pipe, default 'pvc_sch40_3_4'
