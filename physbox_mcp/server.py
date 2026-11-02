@@ -1160,6 +1160,63 @@ async def physics_export_relief(
     result = await get_conn(Ph).send("EXPORT_RELIEF", payload, timeout=300.0)
     return _deliver_export(result, out_dir)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_export_cut", (
+    "Lay the Mesh scene out flat as SVG, as the bottom bar's Etch button and the 2D dialogs do: "
+    "kind 'panels' (flat panels with joints, nested, kerf or dogbones for the machine), 'contour' "
+    "(stacked slices of the bench stock) or 'unfold' (a net to fold or sew). to_etch=True sends it "
+    "straight to the open Etch tab with its name, stock thickness and machine; out_dir writes the .svg."
+)))
+async def physics_export_cut(
+    kind: str = "panels",
+    master_id: str | None = None,
+    machine: str | None = None,
+    sheet_mode: str | None = None,
+    thickness_mm: float | None = None,
+    to_etch: bool = False,
+    out_dir: str | None = None,
+) -> Any:
+    payload = compact_dict(
+        kind=kind,
+        masterId=master_id,
+        machine=machine,
+        sheetMode=sheet_mode,
+        thicknessMm=thickness_mm,
+        # The bytes come back when they are kept: on disk, or handed to Etch.
+        includeFiles=True if (out_dir is not None or to_etch) else False,
+    )
+    result = await get_conn(Ph).send("EXPORT_CUT", payload, timeout=180.0)
+    etch_reply: dict | None = None
+    if to_etch and isinstance(result, dict) and result.get("ok") is not False:
+        files = result.get("files") or []
+        svg = ""
+        if files and files[0].get("base64"):
+            svg = base64.b64decode(files[0]["base64"]).decode("utf-8", errors="replace")
+        meta = result.get("etch") or {}
+        # Mesh to Etch through this server, never through the agent: a
+        # nested layout is far more SVG than is worth reading.
+        try:
+            sent = await get_conn(Et).send("SET_SVG", compact_dict(
+                svg=svg,
+                name=meta.get("name"),
+                thicknessMm=meta.get("thicknessMm"),
+                machine=meta.get("machine"),
+                trueSize=True,
+            ), timeout=60.0)
+            etch_reply = {"sent": bool(isinstance(sent, dict) and sent.get("ok")), **(sent if isinstance(sent, dict) else {})}
+        except Exception as e:  # no Etch tab, most often
+            etch_reply = {"sent": False, "error": f"Could not reach Etch ({e}). Open Etch in a tab and try again, or pass out_dir for the .svg."}
+    delivered = _deliver_export(result, out_dir)
+    if isinstance(result, dict):
+        for key in ("kind", "machine", "cut"):
+            if key in result:
+                delivered[key] = result[key]
+    if etch_reply is not None:
+        delivered["etch"] = etch_reply
+        if etch_reply.get("sent"):
+            # It is in Etch; "ask again with out_dir" is only for a file.
+            delivered.pop("note", None)
+    return delivered
+
 @mcp.tool(description=get_doc(physics_docs, "physics_add_simulation", (
     "Cut a relief, machining, laser, contour, mold, or mold cast job back out and add the result to "
     "the Mesh scene as a body, beside the model or laid over it. kind='mold' adds the generated 3D mold "
@@ -2969,8 +3026,16 @@ async def etch_set_document(document: dict) -> Any:
     return await get_conn(Et).send("SET_DOCUMENT", {"document": document})
 
 @mcp.tool(description=get_doc(etch_docs, "etch_set_svg", "Set/import raw SVG XML onto canvas"))
-async def etch_set_svg(svg: str) -> Any:
-    return await get_conn(Et).send("SET_SVG", {"svg": svg})
+async def etch_set_svg(
+    svg: str,
+    name: str | None = None,
+    thickness_mm: float | None = None,
+    machine: str | None = None,
+    true_size: bool | None = None,
+) -> Any:
+    return await get_conn(Et).send("SET_SVG", compact_dict(
+        svg=svg, name=name, thicknessMm=thickness_mm, machine=machine, trueSize=true_size,
+    ))
 
 @mcp.tool(description=get_doc(etch_docs, "etch_export_svg", "Export active design as SVG XML string"))
 async def etch_export_svg() -> Any:
