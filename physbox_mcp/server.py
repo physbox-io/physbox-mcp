@@ -1099,10 +1099,13 @@ async def physics_export_machining(
     setups: str | int | None = None,
     clearance_mm: float | None = None,
     tool_stickout_mm: float | None = None,
+    master_id: str | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
         sides=sides,
+        # The part to machine, comma-separated for several; default every body.
+        masterId=master_id,
         # 'auto', 1, 2, or faces as '+z,+x,-x'; when given it plans the setups instead of sides.
         setups=setups,
         clearanceMm=clearance_mm,
@@ -1118,7 +1121,9 @@ async def physics_export_machining(
 @mcp.tool(description=get_doc(physics_docs, "physics_export_relief", (
     "Plan a relief carve of the current Mesh scene as the Relief Carve dialog would, and report "
     "the roughing/finishing split, the estimate and the tool-change line. Uses the dialog's last "
-    "settings unless told otherwise. Pass out_dir to get relief-carve.nc written there."
+    "settings unless told otherwise. Carves master_id (comma-separated for several), else every body. "
+    "The stock is the bench board, set with physics_set_environment. "
+    "Pass out_dir to get relief-carve.nc written there."
 )))
 async def physics_export_relief(
     roughing_tool_dia_mm: float | None = None,
@@ -1128,13 +1133,11 @@ async def physics_export_relief(
     material: str | None = None,
     roughing_strategy: str | None = None,
     roughing_enabled: bool | None = None,
-    stock_width_mm: float | None = None,
-    stock_depth_mm: float | None = None,
-    stock_thickness_mm: float | None = None,
     vertical_scale_mode: str | None = None,
     vertical_exaggeration: float | None = None,
     fit_mode: str | None = None,
     background_mode: str | None = None,
+    master_id: str | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -1149,9 +1152,7 @@ async def physics_export_relief(
         material=material,
         roughingStrategy=roughing_strategy,
         roughingEnabled=roughing_enabled,
-        stockWidthMm=stock_width_mm,
-        stockDepthMm=stock_depth_mm,
-        stockThicknessMm=stock_thickness_mm,
+        masterId=master_id,
         includeFiles=out_dir is not None,
     )
     # Planning samples the model and machines the whole surface twice over on
@@ -1177,9 +1178,6 @@ async def physics_add_simulation(
     finishing_tool_type: str | None = None,
     carve_depth_mm: float | None = None,
     material: str | None = None,
-    stock_width_mm: float | None = None,
-    stock_depth_mm: float | None = None,
-    stock_thickness_mm: float | None = None,
     sides: int | None = None,
     setups: str | int | None = None,
     stage: str | int | None = None,
@@ -1250,7 +1248,7 @@ async def physics_add_simulation(
         placement: 'beside' or 'over'
         stage: For kind='machining': one step instead of the finished part, 0 the stock (pins bored), k the block after setups 1 to k stood as it is for setup k, or 'all' for every step not yet in the scene
         body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
-        master_id: For kind='mold', or 'mold_cast' without body_id: the part to mold, comma-separated for several (default: every body)
+        master_id: The part to cut, carve, slice or mold, comma-separated for several (default: every body). For kind 'relief', 'machining', 'laser', 'contour', 'tube', 'mold', and 'mold_cast' without body_id
         method: For kind='mold_cast', not with body_id: 'rigid' (default, a printed mold), 'silicone' (pour box, silicone poured, mold turned over and vented, material poured), 'sand' or 'lost-pla' (pattern in its flask, metal poured): the whole job to the finished piece
         silicone: For method='silicone': the mold's silicone, 'platinum' (default) or 'tin'
         hole, hole_dia_mm, hole_at_mm: For method='silicone': a hole through the silicone, as physics_make_pour_box takes them; 'pour' pours through it
@@ -1288,9 +1286,6 @@ async def physics_add_simulation(
         finishingToolType=finishing_tool_type,
         carveDepthMm=carve_depth_mm,
         material=material,
-        stockWidthMm=stock_width_mm,
-        stockDepthMm=stock_depth_mm,
-        stockThicknessMm=stock_thickness_mm,
         sides=sides,
         setups=setups,
         stage=stage,
