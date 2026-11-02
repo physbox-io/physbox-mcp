@@ -800,8 +800,11 @@ async def detect_apps() -> list[dict]:
 @mcp.tool()
 async def send_command(port: int, cmd: str, payload: dict | None = None) -> Any:
     """
-    Send an arbitrary JSON command to any app and return the result.
-    port: 5173 (process), 5174 (circuit), 5175 (physics).
+    Send a raw bridge command to an app and return its reply, for what no tool
+    covers. port: 5173 Flux, 5174 Volt, 5175 Mesh, 5176 Etch. cmd is the
+    bridge's name (e.g. 'GET_SCENE_SUMMARY'), payload its fields in camelCase.
+    Mesh answers cmd='LIST_COMMANDS' with every command it takes; prefer the
+    named tool where there is one, since it documents and checks its arguments.
     """
     return await get_conn(port).send(cmd, payload)
 
@@ -1216,6 +1219,20 @@ async def physics_export_cut(
             # It is in Etch; "ask again with out_dir" is only for a file.
             delivered.pop("note", None)
     return delivered
+
+@mcp.tool(description=get_doc(physics_docs, "physics_check_dfm", (
+    "Will it make? The editor's DFM check of master_id (default every body) for process 'print', "
+    "'cnc' or 'cast' (default: the bench's machine): walls too thin, overhangs, undercuts, draft, "
+    "sections a casting will not keep, with severity, fix and position in mm."
+)))
+async def physics_check_dfm(
+    process: str | None = None,
+    master_id: str | None = None,
+    cast_material: str | None = None,
+) -> Any:
+    return await get_conn(Ph).send("CHECK_DFM", compact_dict(
+        process=process, masterId=master_id, castMaterial=cast_material,
+    ), timeout=120.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_add_simulation", (
     "Cut a relief, machining, laser, contour, mold, or mold cast job back out and add the result to "
