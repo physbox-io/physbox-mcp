@@ -2183,8 +2183,9 @@ async def physics_get_schema(section: str | None = None) -> Any:
     return get_reference_section(physics_docs, section)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_build_scene", "Build scene from bodies"))
-async def physics_build_scene(bodies: list[Any]) -> Any:
-    return await get_conn(Ph).send("BUILD_SCENE", {"bodies": bodies}, timeout=60.0)
+async def physics_build_scene(bodies: list[Any], name: str | None = None) -> Any:
+    # name: what the scene is called; the app shows it in place of "Modified scene".
+    return await get_conn(Ph).send("BUILD_SCENE", compact_dict(bodies=bodies, name=name), timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_run_headless", "Run simulation headlessly"))
 async def physics_run_headless(ticks: int = 300, stride: int = 1, bodies: list[str] | None = None) -> Any:
