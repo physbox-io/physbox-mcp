@@ -803,7 +803,7 @@ async def send_command(port: int, cmd: str, payload: dict | None = None) -> Any:
     Send a raw bridge command to an app and return its reply, for what no tool
     covers. port: 5173 Flux, 5174 Volt, 5175 Mesh, 5176 Etch. cmd is the
     bridge's name (e.g. 'GET_SCENE_SUMMARY'), payload its fields in camelCase.
-    Mesh answers cmd='LIST_COMMANDS' with every command it takes; prefer the
+    Mesh, Etch and Volt answer cmd='LIST_COMMANDS' with every command they take; prefer the
     named tool where there is one, since it documents and checks its arguments.
     """
     return await get_conn(port).send(cmd, payload)
