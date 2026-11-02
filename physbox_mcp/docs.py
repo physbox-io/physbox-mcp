@@ -72,6 +72,44 @@ def get_reference_docs(docs: dict) -> dict:
     return {**schema_fields, **extra_sections}
 
 
+# One page of section='all': under what one tool result is read in full.
+ALL_PAGE_CHARS = 20000
+
+
+def _all_page(full: dict, tools: dict, section: str) -> dict:
+    """section='all', a page at a time: every reference section, then every
+    tool's detail sections, packed in order into pages of ALL_PAGE_CHARS.
+
+    'all' once returned the whole reference in one reply, ~75 KB that no
+    agent could read in one go, and without the per-tool sections at all.
+    A section bigger than a page goes on a page of its own.
+    """
+    items: list[tuple[str, Any]] = list(full.items())
+    for t in sorted(tools):
+        entry = tools[t]
+        if isinstance(entry, dict) and isinstance(entry.get("details"), dict) and entry["details"]:
+            items.append((f"tools.{t}", entry))
+    pages: list[dict] = [{}]
+    used = 0
+    for key, value in items:
+        size = len(json.dumps(value, ensure_ascii=False)) + len(key)
+        if pages[-1] and used + size > ALL_PAGE_CHARS:
+            pages.append({})
+            used = 0
+        pages[-1][key] = value
+        used += size
+    try:
+        n = int(section.split(":", 1)[1]) if ":" in section else 1
+    except ValueError:
+        n = 0
+    if not 1 <= n <= len(pages):
+        return {"error": f"section='all' has pages 'all' (1) to 'all:{len(pages)}'."}
+    result: dict[str, Any] = {"page": n, "pages": len(pages), "sections": pages[n - 1]}
+    if n < len(pages):
+        result["next"] = f"all:{n + 1}"
+    return result
+
+
 def get_reference_section(docs: dict, section: str | None) -> dict:
     """One part of get_reference_docs (or a tool's detail subsection), or an index.
 
@@ -86,8 +124,8 @@ def get_reference_section(docs: dict, section: str | None) -> dict:
     tools = docs.get("tools", {})
     section = section.strip() if isinstance(section, str) and section.strip() else None
 
-    if section == "all":
-        return full
+    if section == "all" or (section.startswith("all:") if section else False):
+        return _all_page(full, tools, section)
 
     if not section:
         sizes = {k: len(json.dumps(v, ensure_ascii=False)) for k, v in full.items()}
@@ -119,7 +157,8 @@ def get_reference_section(docs: dict, section: str | None) -> dict:
             "Call again with section=<name> or a dotted path like "
             "section='gotchas.collision', section='nodeFields.features', or "
             "section='tools.physics_cut.hardware' (pass '<name>.all' for a whole "
-            "multi-part section, or section='all' for everything)."
+            "multi-part section, or section='all' for everything, in pages: "
+            "'all', then 'all:2' and on as each page's `next` says)."
         )
         return result
 

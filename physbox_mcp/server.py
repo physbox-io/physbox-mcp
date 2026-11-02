@@ -1197,6 +1197,19 @@ async def physics_add_simulation(
     dissolvable_liner: bool | None = None,
     liner_skin_mm: float | None = None,
     cast_material: str | None = None,
+    wall_mm: float | None = None,
+    floor_mm: float | None = None,
+    cavity_depth_mm: float | None = None,
+    pull_direction: str | None = None,
+    pin_dia_mm: float | None = None,
+    pin_height_mm: float | None = None,
+    pin_tolerance_mm: float | None = None,
+    include_sprue: bool | None = None,
+    sprue_top_dia_mm: float | None = None,
+    sprue_bottom_dia_mm: float | None = None,
+    include_vents: bool | None = None,
+    vent_dia_mm: float | None = None,
+    include_pry_notches: bool | None = None,
     master_id: str | None = None,
     method: str | None = None,
     silicone: str | None = None,
@@ -1249,6 +1262,10 @@ async def physics_add_simulation(
         pour_direction: For kind='mold_cast' with body_id: the side poured from, '+z', '-z', '+x', '-x', '+y', '-y' (default: the best side)
         fill_mm: For kind='mold_cast' with body_id: fill depth in mm (default: to the rim, or to the fill line of an upright pour box among the bodies)
         dissolvable_liner: For kind='mold': a PLA shell with a dissolvable PVA liner (two-material 3MF)
+        wall_mm, floor_mm: For the rigid mold: the block's wall round the part (default 10) and the slab behind the cavity (default 5), mm. clearance_mm is machining's, not the mold's
+        cavity_depth_mm, pull_direction: For the rigid mold: cavity depth (0 = the part's), and the axis it opens along ('auto', '+z', '-z', '+x', '-x', '+y', '-y')
+        pin_dia_mm, pin_height_mm, pin_tolerance_mm: For a clamshell: the registration pins (default 6, 4, 0.25)
+        include_sprue, sprue_top_dia_mm, sprue_bottom_dia_mm, include_vents, vent_dia_mm, include_pry_notches: For the rigid mold: the pour sprue (default on, 8 to 4 mm), air vents (on, 1.5 mm) and pry notches (on). The reply's `features` says where each is
         liner_skin_mm: PVA between the casting and the PLA, mm (default 1.2)
         cast_material: 'epoxy' (default), 'polyurethane', 'platinum' or 'tin' (silicone = platinum), 'wax', 'chocolate', 'water', 'plaster', 'concrete', 'jesmonite'; the water-based ones are refused with a liner, metals always. With body_id the reply adds the pour's weight in it
         sheet_mode, bend_radius_mm, k_factor, scale_factor: For kind='sheet': 'papercraft' (default), 'sheet_metal' or 'soft_goods', and the bend the brake makes (material_thickness_mm is the sheet)
@@ -1288,6 +1305,19 @@ async def physics_add_simulation(
         dissolvableLiner=dissolvable_liner,
         linerSkinMm=liner_skin_mm,
         castMaterial=cast_material,
+        wallMm=wall_mm,
+        floorMm=floor_mm,
+        cavityDepthMm=cavity_depth_mm,
+        pullDirection=pull_direction,
+        pinDiaMm=pin_dia_mm,
+        pinHeightMm=pin_height_mm,
+        pinToleranceMm=pin_tolerance_mm,
+        includeSprue=include_sprue,
+        sprueTopDiaMm=sprue_top_dia_mm,
+        sprueBottomDiaMm=sprue_bottom_dia_mm,
+        includeVents=include_vents,
+        ventDiaMm=vent_dia_mm,
+        includePryNotches=include_pry_notches,
         masterId=master_id,
         method=method,
         silicone=silicone,

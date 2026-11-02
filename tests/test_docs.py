@@ -175,3 +175,30 @@ def test_hierarchical_tool_docs_and_sections():
     nf_cuts = get_reference_section(docs, "nodeFields.cuts")
     assert "nodeFields.cuts" in nf_cuts and "DeclarativeCut" in nf_cuts["nodeFields.cuts"]
 
+
+
+def test_all_comes_in_pages_and_includes_tool_details():
+    """section='all' was ~75 KB in one reply, and left out the per-tool sections."""
+    import json
+    from physbox_mcp.docs import ALL_PAGE_CHARS
+
+    docs = {
+        "overview": "o",
+        "schema": {"geomTypes": ["box"]},
+        "big": {f"k{i}": "x" * 1000 for i in range(30)},
+        "small": "s",
+        "tools": {
+            "t1": {"summary": "a", "details": {"one": "y" * 500}},
+            "t2": "plain",
+        },
+    }
+    first = get_reference_section(docs, "all")
+    assert first["page"] == 1 and first["pages"] >= 2 and first["next"] == "all:2"
+    seen: dict = {}
+    for n in range(1, first["pages"] + 1):
+        page = get_reference_section(docs, "all" if n == 1 else f"all:{n}")
+        assert len(page["sections"]) == 1 or len(json.dumps(page["sections"])) <= ALL_PAGE_CHARS + 2000
+        seen.update(page["sections"])
+    assert {"geomTypes", "overview", "big", "small", "tools.t1"} <= set(seen)
+    assert "tools.t2" not in seen  # no details: its description already says it all
+    assert "error" in get_reference_section(docs, f"all:{first['pages'] + 1}")
