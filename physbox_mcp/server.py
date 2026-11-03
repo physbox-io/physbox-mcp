@@ -1089,8 +1089,9 @@ async def physics_timber_breakdown(
 
 @mcp.tool(description=get_doc(physics_docs, "physics_build_brickwork", (
     "Lay a Mesh body (or the whole scene) in brick, course by course: bricks to buy, cuts, mortar "
-    "and lintels. standard_id 'uk' | 'us_modular' | 'eu_nf' | 'au' | 'mini_12'; bond 'stretcher' | "
-    "'english' | 'flemish' | 'stack'; placement 'beside' | 'replace' | 'none' (count only)."
+    "and lintels, or toy bricks by size. standard_id 'uk' | 'us_modular' | 'eu_nf' | 'au' | 'mini_6' | "
+    "'mini_12' | 'toy'; bond 'stretcher' | 'english' | 'flemish' | 'stack'; toy_sizes e.g. ['2x4', '2x2']; "
+    "placement 'beside' | 'replace' | 'none' (count only)."
 )))
 async def physics_build_brickwork(
     body_id: str | None = None,
@@ -1098,6 +1099,7 @@ async def physics_build_brickwork(
     bond: str | None = None,
     joint_mm: float | None = None,
     wastage_pct: float | None = None,
+    toy_sizes: list[str] | None = None,
     placement: str = "beside",
 ) -> Any:
     payload = compact_dict(
@@ -1106,6 +1108,7 @@ async def physics_build_brickwork(
         bond=bond,
         jointMm=joint_mm,
         wastagePct=wastage_pct,
+        toySizes=toy_sizes,
         placement=placement,
     )
     # Laid in a worker; a house is seconds, and settling thousands of bricks into the scene more.
