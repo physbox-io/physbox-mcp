@@ -3134,13 +3134,23 @@ async def etch_add_image(
         image=image, options=options, layerId=layerId
     ), timeout=60.0)
 
-@mcp.tool(description=get_doc(etch_docs, "etch_combine", "Union, subtract, intersect or exclude two or more shapes into one path; or join/unjoin separate pieces into one part"))
-async def etch_combine(elementIds: list[str], op: str) -> Any:
+@mcp.tool(description=get_doc(etch_docs, "etch_combine", "Union, subtract, intersect or exclude shapes into one path; join/unjoin pieces; fretwork; fill a shape with a texture; repeat shapes by symmetry"))
+async def etch_combine(
+    elementIds: list[str],
+    op: str,
+    texture: str | None = None,
+    mode: str | None = None,
+    sizeMm: float | None = None,
+    repeat: dict | None = None,
+) -> Any:
     # Order is the operation, not a detail: elementIds[0] is the base, and for
     # 'subtract' it is the shape being cut into. Passed through as sent.
-    # 'join' and 'unjoin' ride on the same tool (one id is enough for them) so
-    # the tool count the website advertises does not move for them.
-    return await get_conn(Et).send("COMBINE", {"elementIds": elementIds, "op": op})
+    # 'join', 'unjoin', 'fretwork', 'fill' and 'repeat' ride on the same tool
+    # so the tool count the website advertises does not move for them.
+    # Fill takes long on a big window (lace grows for a second or two).
+    return await get_conn(Et).send("COMBINE", compact_dict(
+        elementIds=elementIds, op=op, texture=texture, mode=mode, sizeMm=sizeMm, repeat=repeat
+    ), timeout=60.0)
 
 @mcp.tool(description=get_doc(etch_docs, "etch_fill_region", "Fill the region of the drawing enclosing a point, as a hatched shape"))
 async def etch_fill_region(x: float, y: float, layerId: str | None = None) -> Any:
