@@ -3140,7 +3140,7 @@ async def etch_add_image(
         image=image, options=options, layerId=layerId
     ), timeout=60.0)
 
-@mcp.tool(description=get_doc(etch_docs, "etch_combine", "Union, subtract, intersect or exclude shapes into one path; join/unjoin pieces; fretwork; fill a shape with a texture (or unfill); repeat shapes by symmetry"))
+@mcp.tool(description=get_doc(etch_docs, "etch_combine", "Union, subtract, intersect or exclude shapes into one path; offset/inset/outset outlines; sweep/unsweep variable-width curves; join/unjoin pieces; fretwork; fill a shape with a texture (or unfill); repeat shapes by symmetry"))
 async def etch_combine(
     elementIds: list[str],
     op: str,
@@ -3148,14 +3148,30 @@ async def etch_combine(
     mode: str | None = None,
     sizeMm: float | None = None,
     repeat: dict | None = None,
+    distanceMm: float | None = None,
+    widths: list[float] | float | str | None = None,
+    brush: str | None = None,
+    cap: str | None = None,
+    smoothingMm: float | None = None,
 ) -> Any:
     # Order is the operation, not a detail: elementIds[0] is the base, and for
     # 'subtract' it is the shape being cut into. Passed through as sent.
-    # 'join', 'unjoin', 'fretwork', 'fill', 'unfill' and 'repeat' ride on the same tool
-    # so the tool count the website advertises does not move for them.
+    # 'join', 'unjoin', 'fretwork', 'fill', 'unfill', 'repeat', 'offset',
+    # 'inset', 'outset', 'sweep' and 'unsweep' ride on the same tool so the tool
+    # count the website advertises does not move for them.
     # Fill takes long on a big window (lace grows for a second or two).
     return await get_conn(Et).send("COMBINE", compact_dict(
-        elementIds=elementIds, op=op, texture=texture, mode=mode, sizeMm=sizeMm, repeat=repeat
+        elementIds=elementIds,
+        op=op,
+        texture=texture,
+        mode=mode,
+        sizeMm=sizeMm,
+        repeat=repeat,
+        distanceMm=distanceMm,
+        widths=widths,
+        brush=brush,
+        cap=cap,
+        smoothingMm=smoothingMm,
     ), timeout=60.0)
 
 @mcp.tool(description=get_doc(etch_docs, "etch_fill_region", "Fill the region of the drawing enclosing a point, as a hatched shape"))
