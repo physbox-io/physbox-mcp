@@ -27,6 +27,7 @@ except ImportError:
 import websockets
 
 from . import cloud
+from .origin import refuse_foreign_origin
 from .docs import (
     APP_REPO_DIR,
     get_doc,
@@ -655,10 +656,10 @@ def start_ws_bridge():
         global is_primary
         while True:
             try:
-                # Loopback, not 0.0.0.0. This hub has no origin check and no shared
-                # secret, and it can drive a machine with a spinning cutter in it —
-                # it had no business being reachable from the LAN even before a
-                # credential could arrive over it.
+                # Loopback, not 0.0.0.0, and only the apps' own origins. This hub has
+                # no shared secret and it can drive a machine with a spinning cutter
+                # in it, so it has no business being reachable from the LAN, or from
+                # any other web page open in the browser (see origin.py).
                 #
                 # More so now that the machine tools can start motion rather than
                 # only trim it. The arming gate in the app is what stands between
@@ -666,7 +667,10 @@ def start_ws_bridge():
                 # on the network and the agent's side of that gate. Both are
                 # needed — the gate answers "may this agent move the machine",
                 # not "whose agent is this".
-                async with websockets.serve(ws_handler, "127.0.0.1", MCP_WS_PORT, max_size=WS_MAX_MESSAGE):
+                async with websockets.serve(
+                    ws_handler, "127.0.0.1", MCP_WS_PORT, max_size=WS_MAX_MESSAGE,
+                    process_request=refuse_foreign_origin,
+                ):
                     is_primary = True
                     print(f"MCP Primary WebSocket Hub listening on ws://localhost:{MCP_WS_PORT}", file=sys.stderr)
                     await asyncio.Future()
