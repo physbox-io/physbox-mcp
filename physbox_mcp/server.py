@@ -1304,6 +1304,7 @@ async def physics_add_simulation(
     wall_mm: float | None = None,
     floor_mm: float | None = None,
     block_shape: str | None = None,
+    high_fidelity: bool | None = None,
     cavity_depth_mm: float | None = None,
     pull_direction: str | None = None,
     pin_dia_mm: float | None = None,
@@ -1370,6 +1371,7 @@ async def physics_add_simulation(
         dissolvable_liner: For kind='mold': a rigid shell with a dissolvable liner (two-material 3MF; liner_material picks the filaments)
         wall_mm, floor_mm: For the rigid mold: the block's wall round the part (default 10) and the slab behind the cavity (default 5), mm. clearance_mm is machining's, not the mold's
         block_shape: For the rigid mold: 'box' (default, the bounding box plus the wall) or 'fit' (the part's outline plus the wall, pins and notches moved onto it; far less filament round a round part)
+        high_fidelity: For the rigid mold: sample the cavity twice as fine, for a fine nozzle (truer walls, four times the triangles). Unset follows the app's High Fidelity switch
         cavity_depth_mm, pull_direction: For the rigid mold: cavity depth (0 = the part's), and the axis it opens along ('auto', '+z', '-z', '+x', '-x', '+y', '-y')
         pin_dia_mm, pin_height_mm, pin_tolerance_mm: For a clamshell: the registration pins (default 6, 4, 0.25)
         include_sprue, sprue_top_dia_mm, sprue_bottom_dia_mm, sprue_feed, include_vents, vent_dia_mm, include_pry_notches: For the rigid mold: the pour sprue (default on; a 16 mm funnel in the lid and a 6 mm neck, never under what the cast material passes), filled from 'bottom' (default: down the wall and along the floor into the lowest point) or 'top', air vents at every high point (on, 4 mm, never under what a bubble of the cast material rises through once printed) and pry notches (on). The reply's `features` says where each is
@@ -1414,6 +1416,7 @@ async def physics_add_simulation(
         wallMm=wall_mm,
         floorMm=floor_mm,
         blockShape=block_shape,
+        highFidelity=high_fidelity,
         cavityDepthMm=cavity_depth_mm,
         pullDirection=pull_direction,
         pinDiaMm=pin_dia_mm,
