@@ -479,6 +479,7 @@
       "type": "GeomType (required — includes parametric mesh shorthands cone, pyramid, wedge, torus, tube, extrude, lathe)",
       "size": "number[]: see geomSizes",
       "rgba": "[r,g,b,a] each 0-1: color and opacity",
+      "glow": "number 0-1: neon. The geom shines in its own rgba colour with a halo of light round it. Looks only, no effect on the physics; the inspector's Glow slider is the same field.",
       "pos": "[x,y,z]: local offset from body origin in MuJoCo Z-up space. Works on all geoms including dynamic meshes.",
       "quat": "[w,x,y,z]: local rotation quaternion",
       "euler": "[roll,pitch,yaw] degrees: local rotation, alternative to quat",
