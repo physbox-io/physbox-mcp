@@ -1202,7 +1202,7 @@ async def physics_export_relief(
     "Lay the Mesh scene out flat as SVG, as the bottom bar's Etch button and the 2D dialogs do: "
     "kind 'panels' (flat panels with joints, nested, kerf or dogbones for the machine), 'contour' "
     "(stacked slices of the bench stock) or 'unfold' (a net to fold or sew). to_etch=True sends it "
-    "straight to the open Etch tab with its name, stock thickness and machine; out_dir writes the .svg."
+    "straight to the open Etch tab with its name, material, stock thickness and machine; out_dir writes the .svg."
 )))
 async def physics_export_cut(
     kind: str = "panels",
@@ -1238,6 +1238,7 @@ async def physics_export_cut(
                 name=meta.get("name"),
                 thicknessMm=meta.get("thicknessMm"),
                 machine=meta.get("machine"),
+                material=meta.get("material"),
                 trueSize=True,
             ), timeout=60.0)
             etch_reply = {"sent": bool(isinstance(sent, dict) and sent.get("ok")), **(sent if isinstance(sent, dict) else {})}
