@@ -1878,6 +1878,13 @@ async def circuit_machine_zero_z(
         timeout=300.0,
     )
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_resume_from_line", "Pick a board that stopped short back up from a line"))
+async def circuit_machine_resume_from_line(fromLine: int) -> Any:
+    # Returns once the job is under way, not once it has finished.
+    return await get_conn(C).send(
+        "MACHINE_RESUME_FROM_LINE", {"fromLine": fromLine}, timeout=120.0
+    )
+
 @mcp.tool(description=get_doc(circuit_docs, "circuit_machine_probe_surface", "Probe a grid across the board and keep the height map"))
 async def circuit_machine_probe_surface(cols: int | None = None, rows: int | None = None) -> Any:
     # One slow descent per point, plus a verification re-probe. A 6x6 grid is
@@ -2910,8 +2917,9 @@ async def physics_undo_lattice(id: str) -> Any:
 #
 # What differs is what is being cut. A solid is machined from several sides with
 # the part re-fixtured between them, so `physics_carve_scene` runs one side; and
-# `physics_machine_resume_from_line` has no equivalent in the other apps because
-# only here is a single job three hours long.
+# `physics_machine_resume_from_line` goes further than the other apps' (a
+# preview, and a job restored after the tab closed) because only here is a
+# single job three hours long.
 
 @mcp.tool(description=get_doc(physics_docs, "physics_machine_status", "Report the machine's state, position and whether it is armed"))
 async def physics_machine_status() -> Any:
@@ -3386,6 +3394,19 @@ async def etch_machine_zero_xy() -> Any:
 async def etch_machine_zero_z(shimThicknessMm: float | None = None) -> Any:
     return await get_conn(Et).send(
         "MACHINE_ZERO_Z", compact_dict(shimThicknessMm=shimThicknessMm), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_zero_all", "Set X, Y and Z at once where the tool stands"))
+async def etch_machine_zero_all(shimThicknessMm: float | None = None) -> Any:
+    return await get_conn(Et).send(
+        "MACHINE_ZERO_ALL", compact_dict(shimThicknessMm=shimThicknessMm), timeout=60.0
+    )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_resume_from_line", "Start a job that stopped short again from a line"))
+async def etch_machine_resume_from_line(fromLine: int) -> Any:
+    # Returns once the job is under way, not once it has finished.
+    return await get_conn(Et).send(
+        "MACHINE_RESUME_FROM_LINE", {"fromLine": fromLine}, timeout=120.0
     )
 
 @mcp.tool(description=get_doc(etch_docs, "etch_machine_guide_spot", "Light the laser at pointer power so the head can be seen"))
