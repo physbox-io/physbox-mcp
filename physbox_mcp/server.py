@@ -1305,6 +1305,8 @@ async def physics_add_simulation(
     dissolvable_liner: bool | None = None,
     liner_skin_mm: float | None = None,
     liner_material: str | None = None,
+    liner_construction: str | None = None,
+    seal_ridge: bool | None = None,
     cast_material: str | None = None,
     wall_mm: float | None = None,
     floor_mm: float | None = None,
@@ -1381,7 +1383,9 @@ async def physics_add_simulation(
         pin_dia_mm, pin_height_mm, pin_tolerance_mm: For a clamshell: the registration pins (default 6, 4, 0.25)
         include_sprue, sprue_top_dia_mm, sprue_bottom_dia_mm, sprue_feed, include_vents, vent_dia_mm, include_pry_notches: For the rigid mold: the pour sprue (default on; a 16 mm funnel in the lid and a 6 mm neck, never under what the cast material passes), filled from 'bottom' (default: down the wall and along the floor into the lowest point) or 'top', air vents at every high point (on, 4 mm, never under what a bubble of the cast material rises through once printed) and pry notches (on). The reply's `features` says where each is
         liner_skin_mm: Liner between the casting and the shell, mm (default 1.2)
-        liner_material: The lined mold's filaments: 'pla_pva' (default), 'pla_bvoh' (dissolves faster), 'petg_pva', 'abs_hips' (d-limonene) or 'pla_pvb' (isopropyl alcohol); the last two take water-based casts
+        liner_material: The lined mold's filaments: 'pla_pva' (default), 'pla_bvoh' (dissolves faster), 'petg_pva', 'abs_hips' or 'asa_hips' (d-limonene) or 'pla_pvb' (isopropyl alcohol); the last three take water-based casts
+        liner_construction: The lined mold as 'combined' (default: shell and liner in one two-filament print) or 'insert' (four single-filament prints: a reusable holder per half and a soluble insert that sits in it, open to the solvent on every side once the holder is off)
+        seal_ridge: For a lined clamshell: a tongue on the lid's shell and a groove in the cavity half's round the liner, so the seam needs no tape (default on)
         cast_material: 'epoxy' (default), 'polyurethane', 'platinum' or 'tin' (silicone = platinum), 'wax', 'chocolate', 'water', 'plaster', 'concrete', 'jesmonite'; the water-based ones are refused with a liner, metals always. With body_id the reply adds the pour's weight in it
         sheet_mode, bend_radius_mm, k_factor, scale_factor: For kind='sheet': 'papercraft' (default), 'sheet_metal' or 'soft_goods', and the bend the brake makes (material_thickness_mm is the sheet)
         pipe_standard_id: For kind='tube': the pipe, default 'pvc_sch40_3_4'
@@ -1417,6 +1421,8 @@ async def physics_add_simulation(
         dissolvableLiner=dissolvable_liner,
         linerSkinMm=liner_skin_mm,
         linerMaterial=liner_material,
+        linerConstruction=liner_construction,
+        sealRidge=seal_ridge,
         castMaterial=cast_material,
         wallMm=wall_mm,
         floorMm=floor_mm,
