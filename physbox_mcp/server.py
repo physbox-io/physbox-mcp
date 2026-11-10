@@ -2077,6 +2077,39 @@ async def physics_import_stl(
         )
     return await get_conn(Ph).send("IMPORT_STL", payload, timeout=timeout)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_import_profile", "Make a flat part from an SVG, or from an outline traced from a picture."))
+async def physics_import_profile(
+    svg: str | None = None,
+    imageData: str | None = None,
+    path: str | None = None,
+    name: str | None = None,
+    widthMm: float | None = None,
+    heightMm: float | None = None,
+    thicknessMm: float | None = None,
+    threshold: float | None = None,
+    subject: str | None = None,
+    detail: str | None = None,
+    pos: list[float] | None = None,
+) -> Any:
+    if path is not None:
+        file = _local_path(path)
+        if not file.is_file():
+            raise RuntimeError(f"No file at {file}" + (f" (from {path})" if str(file) != path else ""))
+        suffix = file.suffix.lower()
+        if suffix == ".svg":
+            svg = file.read_text(encoding="utf-8", errors="replace")
+        elif suffix in _IMAGE_TYPES:
+            imageData = f"data:{_IMAGE_TYPES[suffix]};base64," + base64.b64encode(file.read_bytes()).decode("ascii")
+        else:
+            raise RuntimeError(f"{file.name} is neither an .svg nor a picture ({', '.join(sorted(_IMAGE_TYPES))}).")
+        if name is None:
+            name = file.stem
+    payload = compact_dict(
+        svg=svg, imageData=imageData, name=name, widthMm=widthMm, heightMm=heightMm,
+        thicknessMm=thicknessMm, threshold=threshold, subject=subject, detail=detail, pos=pos,
+    )
+    return await get_conn(Ph).send("IMPORT_PROFILE", payload, timeout=60.0)
+
 _IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
                 ".gif": "image/gif", ".bmp": "image/bmp"}
 
