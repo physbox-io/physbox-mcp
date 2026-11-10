@@ -2285,10 +2285,20 @@ async def physics_build_scene(bodies: list[Any], name: str | None = None) -> Any
     return await get_conn(Ph).send("BUILD_SCENE", compact_dict(bodies=bodies, name=name), timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_run_headless", "Run simulation headlessly"))
-async def physics_run_headless(ticks: int = 300, stride: int = 1, bodies: list[str] | None = None) -> Any:
+async def physics_run_headless(
+    ticks: int = 300,
+    stride: int = 1,
+    bodies: list[str] | None = None,
+    include: list[str] | None = None,
+    summary: bool = False,
+) -> Any:
     payload: dict[str, Any] = {"ticks": ticks, "stride": stride}
     if bodies:
         payload["bodies"] = bodies
+    if include is not None:
+        payload["include"] = include
+    if summary:
+        payload["summary"] = True
     return await get_conn(Ph).send("RUN_HEADLESS", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_history", "Return telemetry history"))
@@ -2299,8 +2309,11 @@ async def physics_get_history(
     max_frames: int | None = None,
     bodies: list[str] | None = None,
     include: list[str] | None = None,
+    summary: bool = False,
 ) -> Any:
     payload: dict[str, Any] = {}
+    if summary:
+        payload["summary"] = True
     if since_time is not None:
         payload["sinceTime"] = since_time
     if last is not None:
