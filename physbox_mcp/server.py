@@ -1884,6 +1884,10 @@ async def circuit_machine_zero_z(
         timeout=300.0,
     )
 
+@mcp.tool(description=get_doc(circuit_docs, "circuit_machine_preview_resume", "What a run from a line would send, without sending it"))
+async def circuit_machine_preview_resume(fromLine: int) -> Any:
+    return await get_conn(C).send("MACHINE_PREVIEW_RESUME", {"fromLine": fromLine}, timeout=30.0)
+
 @mcp.tool(description=get_doc(circuit_docs, "circuit_machine_resume_from_line", "Pick a board that stopped short back up from a line"))
 async def circuit_machine_resume_from_line(fromLine: int) -> Any:
     # Returns once the job is under way, not once it has finished.
@@ -3407,6 +3411,10 @@ async def etch_machine_zero_all(shimThicknessMm: float | None = None) -> Any:
     return await get_conn(Et).send(
         "MACHINE_ZERO_ALL", compact_dict(shimThicknessMm=shimThicknessMm), timeout=60.0
     )
+
+@mcp.tool(description=get_doc(etch_docs, "etch_machine_preview_resume", "What a run from a line would send, without sending it"))
+async def etch_machine_preview_resume(fromLine: int) -> Any:
+    return await get_conn(Et).send("MACHINE_PREVIEW_RESUME", {"fromLine": fromLine}, timeout=30.0)
 
 @mcp.tool(description=get_doc(etch_docs, "etch_machine_resume_from_line", "Start a job that stopped short again from a line"))
 async def etch_machine_resume_from_line(fromLine: int) -> Any:

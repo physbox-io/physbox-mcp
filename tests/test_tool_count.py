@@ -22,11 +22,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SERVER = ROOT / "physbox_mcp" / "server.py"
 
-#: Total tools the server exposes — "253 Native MCP Tools" on every page.
-SITE_TOTAL = 253
+#: Total tools the server exposes — "255 Native MCP Tools" on every page.
+SITE_TOTAL = 255
 
-#: The breakdown in the sentence under "253 Tools. One pip install."
-SITE_SIMULATOR = 239  # etch, circuit, physics and process, less the two below
+#: The breakdown in the sentence under "255 Tools. One pip install."
+SITE_SIMULATOR = 241  # etch, circuit, physics and process, less the two below
 SITE_CLOUD = 10  # the run archive and the account: physbox_*
 SITE_CROSS_APP = 4  # detect_apps, send_command, list_sessions, use_session
 
