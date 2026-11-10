@@ -2829,6 +2829,7 @@ async def physics_cut(
     floorRadiusMm: float | None = None,
     seal: str | None = None,
     turned: bool | None = None,
+    quarter: int | None = None,
     cuts: list[dict[str, Any]] | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -2837,7 +2838,7 @@ async def physics_cut(
         threadPitchMm=threadPitchMm, threadLeft=threadLeft, threadFitMm=threadFitMm,
         size=size, bore=bore, fitMm=fitMm,
         outline=outline, cornerRadiusMm=cornerRadiusMm, floor=floor, floorRadiusMm=floorRadiusMm,
-        seal=seal, turned=turned,
+        seal=seal, turned=turned, quarter=quarter,
         cuts=cuts,
     )
     return await get_conn(Ph).send("BODY_CUT", payload, timeout=60.0)
