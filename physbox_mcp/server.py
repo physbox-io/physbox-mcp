@@ -883,7 +883,7 @@ async def physics_export_cast(
 async def physics_export_print(
     ids: list[str] | None = None,
     format: str = "stl",
-    separate: bool = False,
+    separate: bool | None = None,
     plate: bool | None = None,
     filaments: int | None = None,
     bed_mm: list[float] | None = None,
