@@ -1307,6 +1307,7 @@ async def physics_add_simulation(
     liner_material: str | None = None,
     liner_construction: str | None = None,
     seal_ridge: bool | None = None,
+    thin_gaps: str | None = None,
     cast_material: str | None = None,
     wall_mm: float | None = None,
     floor_mm: float | None = None,
@@ -1386,6 +1387,7 @@ async def physics_add_simulation(
         liner_material: The lined mold's filaments: 'pla_pva' (default), 'pla_bvoh' (dissolves faster), 'petg_pva', 'abs_hips' or 'asa_hips' (d-limonene) or 'pla_pvb' (isopropyl alcohol); the last three take water-based casts
         liner_construction: The lined mold as 'combined' (default: shell and liner in one two-filament print) or 'insert' (single-filament prints: a reusable holder per half and a soluble insert that sits in it, open to the solvent on every side once the holder is off; an insert that would hang liner over the casting as it prints comes cut into stacked pieces, so no slicer support goes in the cavity)
         seal_ridge: For a lined clamshell: a tongue on the lid's shell and a groove in the cavity half's round the liner, so the seam needs no tape (default on)
+        thin_gaps: For kind='mold': gaps in the casting thinner than the printer (set in Mesh's bottom bar) can line: 'leave' (default, a warning names them), 'close' (filled with casting) or 'fix' (the part trimmed back until they print)
         cast_material: 'epoxy' (default), 'polyurethane', 'platinum' or 'tin' (silicone = platinum), 'wax', 'chocolate', 'water', 'plaster', 'concrete', 'jesmonite'; the water-based ones are refused with a liner, metals always. With body_id the reply adds the pour's weight in it
         sheet_mode, bend_radius_mm, k_factor, scale_factor: For kind='sheet': 'papercraft' (default), 'sheet_metal' or 'soft_goods', and the bend the brake makes (material_thickness_mm is the sheet)
         pipe_standard_id: For kind='tube': the pipe, default 'pvc_sch40_3_4'
@@ -1423,6 +1425,7 @@ async def physics_add_simulation(
         linerMaterial=liner_material,
         linerConstruction=liner_construction,
         sealRidge=seal_ridge,
+        thinGaps=thin_gaps,
         castMaterial=cast_material,
         wallMm=wall_mm,
         floorMm=floor_mm,
