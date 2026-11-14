@@ -949,6 +949,68 @@ async def physics_make_pour_box(
     result = await get_conn(Ph).send("MAKE_POUR_BOX", payload, timeout=120.0)
     return _deliver_export(result, out_dir)
 
+@mcp.tool(description=get_doc(physics_docs, "physics_make_slip_mold", (
+    "Make a plaster mold for slip casting the part in the Mesh scene, in n pieces (sides round the pour "
+    "axis plus an optional tapered base), and a printed case per piece that casts it in plaster. Reports "
+    "the pieces, plaster and slip; simulate_cast=True also casts it (clay wall built, drained, fired); "
+    "apply=True adds them to the scene; out_dir writes the cases' STLs."
+)))
+async def physics_make_slip_mold(
+    body_id: str | None = None,
+    sides: int | str | None = None,
+    base: bool | str | None = None,
+    slip: str | None = None,
+    shrink_percent: float | None = None,
+    plaster_mm: float | None = None,
+    spare_height_mm: float | None = None,
+    spare_dia_mm: float | None = None,
+    fill_inside: bool | None = None,
+    natch_dia_mm: float | None = None,
+    base_taper_deg: float | None = None,
+    draft_deg: float | None = None,
+    case_wall_mm: float | None = None,
+    freeboard_mm: float | None = None,
+    simulate_cast: bool | None = None,
+    cast_wall_mm: float | None = None,
+    apply: bool = False,
+    out_dir: str | None = None,
+) -> Any:
+    payload = compact_dict(
+        bodyId=body_id,
+        sides=sides,
+        base=base,
+        slip=slip,
+        shrinkPercent=shrink_percent,
+        plasterMm=plaster_mm,
+        spareHeightMm=spare_height_mm,
+        spareDiaMm=spare_dia_mm,
+        fillInside=fill_inside,
+        natchDiaMm=natch_dia_mm,
+        baseTaperDeg=base_taper_deg,
+        draftDeg=draft_deg,
+        caseWallMm=case_wall_mm,
+        freeboardMm=freeboard_mm,
+        simulateCast=simulate_cast,
+        castWallMm=cast_wall_mm,
+        apply=apply or None,
+        includeFiles=out_dir is not None,
+    )
+    result = await get_conn(Ph).send("MAKE_SLIP_MOLD", payload, timeout=180.0)
+    return _deliver_export(result, out_dir)
+
+@mcp.tool(description=get_doc(physics_docs, "physics_add_draft", (
+    "Taper the given Mesh bodies (default every body) to pull straight up along the scene's Z as they "
+    "stand, from their lowest point, baked into the part as one undo step. keep='top' (default) adds "
+    "material toward the base; keep='base' removes it toward the top."
+)))
+async def physics_add_draft(
+    body_id: str | None = None,
+    draft_deg: float = 2,
+    keep: str | None = None,
+) -> Any:
+    payload = compact_dict(bodyId=body_id, draftDeg=draft_deg, keep=keep)
+    return await get_conn(Ph).send("ADD_DRAFT", payload, timeout=60.0)
+
 @mcp.tool(description=get_doc(physics_docs, "physics_set_cast_prep", (
     "Prepare every part in the Mesh scene for casting, in the model itself: chamfer outside edges, "
     "fillet inside corners and, for method 'sand', bake draft into every part. Calling it again "
@@ -2172,6 +2234,7 @@ async def physics_set_environment(
     density: float | None = None,
     floorFriction: float | None = None,
     floorBounce: float | None = None,
+    background: str | None = None,
     fidelity: str | None = None,
     stock_width_mm: float | None = None,
     stock_depth_mm: float | None = None,
@@ -2184,6 +2247,7 @@ async def physics_set_environment(
         density=density,
         floorFriction=floorFriction,
         floorBounce=floorBounce,
+        background=background,
         fidelity=fidelity,
         stockWidthMm=stock_width_mm,
         stockDepthMm=stock_depth_mm,
