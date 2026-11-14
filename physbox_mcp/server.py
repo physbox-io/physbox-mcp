@@ -1301,6 +1301,7 @@ async def physics_export_cut(
                 thicknessMm=meta.get("thicknessMm"),
                 machine=meta.get("machine"),
                 material=meta.get("material"),
+                sheets=meta.get("sheets"),
                 trueSize=True,
             ), timeout=60.0)
             etch_reply = {"sent": bool(isinstance(sent, dict) and sent.get("ok")), **(sent if isinstance(sent, dict) else {})}
