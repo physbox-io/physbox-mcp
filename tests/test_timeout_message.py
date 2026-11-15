@@ -42,18 +42,17 @@ def test_the_message_says_the_command_may_have_run_and_to_check_first():
 
 
 def test_every_app_command_wait_reports_it():
-    """AppConnection.send waits in two places, primary and peer; both must say it."""
+    """AppConnection.send waits in two places, primary and peer, both through
+    await_reply (which waits out silence, see test_heartbeat.py); it says it."""
     tree = _tree()
     conn = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "AppConnection")
     send = next(n for n in conn.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "send")
-    handlers = [
-        h for h in ast.walk(send)
-        if isinstance(h, ast.ExceptHandler) and h.type is not None and "TimeoutError" in ast.dump(h.type)
-    ]
-    assert len(handlers) == 2
-    for h in handlers:
-        raised = [r for r in ast.walk(h) if isinstance(r, ast.Raise)]
-        assert raised and all(r.exc is not None and "command_timeout_error" in ast.dump(r.exc) for r in raised)
+    waits = [c for c in ast.walk(send) if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "await_reply"]
+    assert len(waits) == 2
+    assert not any(isinstance(c, ast.Call) and getattr(c.func, "attr", None) == "wait_for" for c in ast.walk(send))
+    wait = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "await_reply")
+    raised = [r for r in ast.walk(wait) if isinstance(r, ast.Raise)]
+    assert raised and all(r.exc is not None and "command_timeout_error" in ast.dump(r.exc) for r in raised)
 
 
 def test_the_bundled_physics_docs_tell_agents_the_same():
