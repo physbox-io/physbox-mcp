@@ -2178,7 +2178,7 @@ async def physics_import_stl(
     importMode: str = "scad_parametric",
     pos: list[float] | None = None,
     scale: float | list[float] | None = None,
-    dynamic: bool = True,
+    dynamic: bool | None = None,
     path: str | None = None,
     replace_id: str | None = None,
 ) -> Any:
