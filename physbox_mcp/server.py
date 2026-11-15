@@ -1248,6 +1248,8 @@ async def physics_build_brickwork(
 async def physics_export_machining(
     sides: int = 1,
     tool_dia_mm: float = 3.0,
+    roughing_tool_dia_mm: float | None = None,
+    finishing_tool_dia_mm: float | None = None,
     material: str = "aluminium",
     finishing_tool_type: str = "flat",
     setups: str | int | None = None,
@@ -1265,6 +1267,8 @@ async def physics_export_machining(
         clearanceMm=clearance_mm,
         toolStickoutMm=tool_stickout_mm,
         toolDiaMm=tool_dia_mm,
+        roughingToolDiaMm=roughing_tool_dia_mm,
+        finishingToolDiaMm=finishing_tool_dia_mm,
         material=material,
         finishingToolType=finishing_tool_type,
         includeFiles=out_dir is not None,
@@ -3203,7 +3207,10 @@ async def physics_machine_frame_job(
 async def physics_carve_scene(
     side: int | None = None,
     toolDiaMm: float | None = None,
+    roughingToolDiaMm: float | None = None,
+    finishingToolDiaMm: float | None = None,
     sides: int | None = None,
+    setups: str | int | list[str] | None = None,
     stockThicknessMm: float | None = None,
     material: str | None = None,
     acceptUnreachable: bool | None = None,
@@ -3213,7 +3220,9 @@ async def physics_carve_scene(
     return await get_conn(Ph).send(
         "CARVE_SCENE",
         compact_dict(
-            side=side, toolDiaMm=toolDiaMm, sides=sides,
+            side=side, toolDiaMm=toolDiaMm,
+            roughingToolDiaMm=roughingToolDiaMm, finishingToolDiaMm=finishingToolDiaMm,
+            sides=sides, setups=setups,
             stockThicknessMm=stockThicknessMm, material=material,
             acceptUnreachable=acceptUnreachable,
         ),
