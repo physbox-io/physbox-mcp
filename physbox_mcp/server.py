@@ -301,11 +301,13 @@ class AppConnection:
             asyncio.run_coroutine_threadsafe(entry["ws"].send(_wire(data)), entry["ws_loop"])
 
             try:
-                return await asyncio.wait_for(fut, timeout=timeout)
-            except asyncio.TimeoutError:
+                return await await_reply(fut, msg_id, cmd, timeout)
+            except RuntimeError:
+                if not fut.done():
+                    fut.cancel()
                 self.pending.pop(msg_id, None)
                 self.pending_session.pop(msg_id, None)
-                raise command_timeout_error(cmd, timeout)
+                raise
         else:
             # Only the hub link is checked here. Whether a tab is open is the
             # primary's to say — it answers a forward for a missing tab with a
@@ -331,10 +333,45 @@ class AppConnection:
             asyncio.run_coroutine_threadsafe(peer_ws.send(_wire(forward_data)), peer_ws_loop)
             
             try:
-                return await asyncio.wait_for(fut, timeout=timeout)
-            except asyncio.TimeoutError:
+                return await await_reply(fut, msg_id, cmd, timeout)
+            except RuntimeError:
+                if not fut.done():
+                    fut.cancel()
                 peer_local_pending.pop(msg_id, None)
+                raise
+
+# When each request in flight last showed signs of life: sent, or a WORKING
+# beat from the app (a tab sends one every 2 s while a command runs). The wait
+# is for `timeout` seconds of silence, not `timeout` in all: loading a scene of
+# cloth, an export or a long build runs as long as it needs, and a tab that has
+# died or hung is still given up on quickly. Apps that send no beats wait as
+# they always did.
+_alive: dict = {}  # msg_id -> time.monotonic()
+# However long beats keep coming, no request is waited on longer than this.
+MAX_WAIT = 900.0
+
+
+def note_alive(msg_id: str) -> None:
+    if msg_id in _alive:
+        _alive[msg_id] = time.monotonic()
+
+
+async def await_reply(fut: asyncio.Future, msg_id: str, cmd: str, timeout: float) -> Any:
+    start = time.monotonic()
+    _alive[msg_id] = start
+    try:
+        while True:
+            now = time.monotonic()
+            left = min(timeout - (now - _alive.get(msg_id, start)), MAX_WAIT - (now - start))
+            if left <= 0:
                 raise command_timeout_error(cmd, timeout)
+            try:
+                return await asyncio.wait_for(asyncio.shield(fut), timeout=left)
+            except asyncio.TimeoutError:
+                continue
+    finally:
+        _alive.pop(msg_id, None)
+
 
 def command_timeout_error(cmd: str, timeout: float) -> RuntimeError:
     """What a caller is told when an app command gets no reply in time.
@@ -542,6 +579,16 @@ async def ws_handler(ws):
                     cmd_data = {**(payload or {}), "cmd": cmd, "id": req_id}  # envelope wins; see AppConnection.send
                     asyncio.run_coroutine_threadsafe(entry["ws"].send(_wire(cmd_data)), entry["ws_loop"])
 
+            elif event == "WORKING":
+                # Still at work on it: here, or on a peer that forwarded it.
+                msg_id = msg.get("id", "")
+                if conn:
+                    conn.touch(session_id)
+                note_alive(msg_id)
+                peer_item = peer_pending_requests.get(msg_id)
+                if peer_item and peer_item[0] in peer_clients:
+                    await peer_item[0].send(json.dumps({"event": "PEER_WORKING", "id": peer_item[1]}))
+
             elif event in ("RESULT", "ERROR"):
                 msg_id = msg.get("id", "")
                 if conn:
@@ -628,6 +675,9 @@ async def run_peer_client_loop():
                     if isinstance(port, int):
                         get_conn(port).connected = bool(msg.get("connected"))
                 
+                elif event == "PEER_WORKING":
+                    note_alive(msg.get("id", ""))
+
                 elif event == "PEER_RESULT":
                     msg_id = msg.get("id")
                     item = peer_local_pending.pop(msg_id, None)
@@ -848,6 +898,7 @@ async def physics_export_cast(
     parting_from_base_mm: float | None = None,
     add_gating: bool = True,
     sprue_dia_mm: float = 0,
+    sprue_at_mm: list[float] | None = None,
     riser_dia_mm: float = 0,
     add_riser: bool = True,
     master_id: str | None = None,
@@ -864,6 +915,7 @@ async def physics_export_cast(
         partingFromBaseMm=parting_from_base_mm,
         addGating=add_gating,
         sprueDiaMm=sprue_dia_mm,
+        sprueAtMm=sprue_at_mm,
         riserDiaMm=riser_dia_mm,
         addRiser=add_riser,
         # With nowhere to put the file there is no reason to encode a megabyte
@@ -964,6 +1016,7 @@ async def physics_make_slip_mold(
     plaster_mm: float | None = None,
     spare_height_mm: float | None = None,
     spare_dia_mm: float | None = None,
+    spare_at_mm: list[float] | None = None,
     fill_inside: bool | None = None,
     natch_dia_mm: float | None = None,
     base_taper_deg: float | None = None,
@@ -984,6 +1037,7 @@ async def physics_make_slip_mold(
         plasterMm=plaster_mm,
         spareHeightMm=spare_height_mm,
         spareDiaMm=spare_dia_mm,
+        spareAtMm=spare_at_mm,
         fillInside=fill_inside,
         natchDiaMm=natch_dia_mm,
         baseTaperDeg=base_taper_deg,
