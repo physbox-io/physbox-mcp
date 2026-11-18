@@ -1164,6 +1164,7 @@ async def physics_timber_breakdown(
     dowel_dia_mm: float | None = None,
     dowel_length_mm: float | None = None,
     joint_mode: str | None = None,
+    cutter_dia_mm: float | None = None,
     tenon_length_mm: float | None = None,
     shoulder_mm: float | None = None,
     tenon_corner_fit: str | None = None,
@@ -1193,6 +1194,7 @@ async def physics_timber_breakdown(
         dowelDiaMm=dowel_dia_mm,
         dowelLengthMm=dowel_length_mm,
         jointMode=joint_mode,
+        cutterDiaMm=cutter_dia_mm,
         tenonLengthMm=tenon_length_mm,
         shoulderMm=shoulder_mm,
         tenonCornerFit=tenon_corner_fit,
@@ -1338,6 +1340,12 @@ async def physics_export_cut(
     machine: str | None = None,
     sheet_mode: str | None = None,
     thickness_mm: float | None = None,
+    bend_radius_mm: float | None = None,
+    k_factor: float | None = None,
+    scale_factor: float | None = None,
+    tab_width_mm: float | None = None,
+    seam_allowance_mm: float | None = None,
+    stitch_pitch_mm: float | None = None,
     to_etch: bool = False,
     out_dir: str | None = None,
 ) -> Any:
@@ -1347,6 +1355,12 @@ async def physics_export_cut(
         machine=machine,
         sheetMode=sheet_mode,
         thicknessMm=thickness_mm,
+        bendRadiusMm=bend_radius_mm,
+        kFactor=k_factor,
+        scaleFactor=scale_factor,
+        tabWidthMm=tab_width_mm,
+        seamAllowanceMm=seam_allowance_mm,
+        stitchPitchMm=stitch_pitch_mm,
         # The bytes come back when they are kept: on disk, or handed to Etch.
         includeFiles=True if (out_dir is not None or to_etch) else False,
     )
@@ -1471,9 +1485,14 @@ async def physics_add_simulation(
     pipe_standard_id: str | None = None,
     with_ids: list[str] | None = None,
     joint_mode: str | None = None,
+    tenon_corner_fit: str | None = None,
     cutter_dia_mm: float | None = None,
     tenon_length_mm: float | None = None,
     shoulder_mm: float | None = None,
+    max_board_width_mm: float | None = None,
+    stock_length_mm: float | None = None,
+    tabletop_clips: bool | None = None,
+    cnc_bed_mm: list[float] | None = None,
     out_dir: str | None = None,
 ) -> Any:
     """Cut a relief, machining, laser, contour, sheet, tube, timber, mold, or mold cast job and add the result to the Mesh scene.
@@ -1492,7 +1511,7 @@ async def physics_add_simulation(
 
     Args:
         kind: 'relief', 'machining', 'laser', 'contour', 'sheet', 'tube', 'timber', 'mold', or 'mold_cast'
-        placement: 'beside' or 'over'
+        placement: 'beside' or 'overlay'
         stage: For kind='machining': one step instead of the finished part, 0 the stock (pins bored), k the block after setups 1 to k stood as it is for setup k, or 'all' for every step not yet in the scene
         body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
         master_id: The part to cut, carve, slice or mold, comma-separated for several (default: every body). For kind 'relief', 'machining', 'laser', 'contour', 'tube', 'mold', and 'mold_cast' without body_id
@@ -1519,10 +1538,10 @@ async def physics_add_simulation(
         liner_construction: The lined mold as 'combined' (default: shell and liner in one two-filament print) or 'insert' (single-filament prints: a reusable holder per half and a soluble insert that sits in it, open to the solvent on every side once the holder is off; an insert that would hang liner over the casting as it prints comes cut into stacked pieces, so no slicer support goes in the cavity)
         seal_ridge: For a lined clamshell: a tongue on the lid's shell and a groove in the cavity half's round the liner, so the seam needs no tape (default on)
         thin_gaps: For kind='mold': gaps in the casting thinner than the printer (set in Mesh's bottom bar) can line: 'leave' (default, a warning names them), 'close' (filled with casting) or 'fix' (the part trimmed back until they print)
-        cast_material: 'epoxy' (default), 'polyurethane', 'platinum' or 'tin' (silicone = platinum), 'wax', 'chocolate', 'water', 'plaster', 'concrete', 'jesmonite'; the water-based ones are refused with a liner, metals always. With body_id the reply adds the pour's weight in it
+        cast_material: 'epoxy' (default), 'polyurethane', 'platinum' or 'tin' (silicone = platinum), 'wax', 'chocolate', 'water', 'plaster', 'concrete', 'jesmonite'; water-based ones are refused with water-soluble liners, water (ice) and chocolate are refused with any liner, and metals are always refused. With body_id the reply adds the pour's weight in it
         sheet_mode, bend_radius_mm, k_factor, scale_factor: For kind='sheet': 'papercraft' (default), 'sheet_metal' or 'soft_goods', and the bend the brake makes (material_thickness_mm is the sheet)
         pipe_standard_id: For kind='tube': the pipe, default 'pvc_sch40_3_4'
-        with_ids, joint_mode, cutter_dia_mm, tenon_length_mm, shoulder_mm: For kind='timber', with body_id and clearance_mm: the parts and the joinery
+        with_ids, joint_mode, tenon_corner_fit, cutter_dia_mm, tenon_length_mm, shoulder_mm, max_board_width_mm, stock_length_mm, tabletop_clips, cnc_bed_mm: For kind='timber', with body_id and clearance_mm: the parts and the joinery
         out_dir: Where to write a lined mold's 3MF
     """
     payload = compact_dict(
@@ -1591,9 +1610,14 @@ async def physics_add_simulation(
         pipeStandardId=pipe_standard_id,
         withIds=with_ids,
         jointMode=joint_mode,
+        tenonCornerFit=tenon_corner_fit,
         cutterDiaMm=cutter_dia_mm,
         tenonLengthMm=tenon_length_mm,
         shoulderMm=shoulder_mm,
+        maxBoardWidthMm=max_board_width_mm,
+        stockLengthMm=stock_length_mm,
+        tabletopClips=tabletop_clips,
+        cncBedMm=cnc_bed_mm,
         includeFiles=True if out_dir is not None else None,
     )
     # Plans the job, then cuts it out of the stock on the tab's export worker.
