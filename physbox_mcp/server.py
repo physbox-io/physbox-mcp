@@ -901,6 +901,7 @@ async def physics_export_cast(
     sprue_at_mm: list[float] | None = None,
     riser_dia_mm: float = 0,
     add_riser: bool = True,
+    cope_drag_height_mm: float | None = None,
     master_id: str | None = None,
     draft_deg: float | None = None,
     shrink_percent: float | None = None,
@@ -918,6 +919,7 @@ async def physics_export_cast(
         sprueAtMm=sprue_at_mm,
         riserDiaMm=riser_dia_mm,
         addRiser=add_riser,
+        copeDragHeightMm=cope_drag_height_mm,
         # With nowhere to put the file there is no reason to encode a megabyte
         # of mesh, push it through a socket and throw it away at this end.
         includeFiles=out_dir is not None,
@@ -1426,6 +1428,8 @@ async def physics_add_simulation(
     mold_type: str | None = None,
     allow_undercuts: bool | None = None,
     trim_channels: bool | None = None,
+    orient_upright: bool | None = None,
+    air_aware: bool | None = None,
     roughing_tool_dia_mm: float | None = None,
     finishing_tool_dia_mm: float | None = None,
     finishing_tool_type: str | None = None,
@@ -1472,6 +1476,10 @@ async def physics_add_simulation(
     master_id: str | None = None,
     method: str | None = None,
     silicone: str | None = None,
+    split_sleeve: bool | None = None,
+    cover_mm: float | None = None,
+    silicone_budget_g: float | None = None,
+    shape: str | None = None,
     hole: str | None = None,
     hole_dia_mm: float | None = None,
     hole_at_mm: list[float] | None = None,
@@ -1516,13 +1524,15 @@ async def physics_add_simulation(
         body_id: Optional mold body ID when kind='mold_cast' to simulate what would be cast from an existing mold body
         master_id: The part to cut, carve, slice or mold, comma-separated for several (default: every body). For kind 'relief', 'machining', 'laser', 'contour', 'tube', 'mold', and 'mold_cast' without body_id
         method: For kind='mold_cast', not with body_id: 'rigid' (default, a printed mold), 'silicone' (pour box, silicone poured, mold turned over and vented, material poured), 'sand' or 'lost-pla' (pattern in its flask, metal poured): the whole job to the finished piece
-        silicone: For method='silicone': the mold's silicone, 'platinum' (default) or 'tin'
+        silicone, split_sleeve, cover_mm, silicone_budget_g, shape: For method='silicone': 'platinum' (default) or 'tin' silicone, separable split sleeve (default True), silicone cover thickness (mm), silicone budget (g), and sleeve shape ('fit', 'round', 'box')
         hole, hole_dia_mm, hole_at_mm: For method='silicone': a hole through the silicone, as physics_make_pour_box takes them; 'pour' pours through it
         draft_deg: For method 'sand' or 'lost-pla': draft on the printed pattern (default 2 for sand, 0 for lost PLA). For kind='mold' and the rigid mold_cast: draft on the cavity walls (default the Mold dialog's, else 0)
         draft_mode: For the rigid mold: 'remove' (default: the opening keeps its size, the casting loses the taper), 'add' (the bottom keeps its size, the casting gains it) or 'centre' (each wall pivots at mid-height)
         shrink_percent: For method 'sand' or 'lost-pla': the shrink allowance in place of the metal's own
         mold_type: 'auto' (default: simplest mold that keeps the part), 'clamshell' or 'open', for kind='mold' or 'mold_cast'
         trim_channels: For kind='mold_cast', whether to trim sprue/vent runner stubs
+        orient_upright: For kind='mold_cast', whether to stand an inverted open-mold casting upright with its flat poured base on Z = 0 (default True)
+        air_aware: For kind='mold_cast', whether to simulate trapped air pockets and capillary rise limits during pouring (default True, False when pouring degassed silicone into a pour box)
         pour_direction: For kind='mold_cast' with body_id: the side poured from, '+z', '-z', '+x', '-x', '+y', '-y' (default: the best side)
         fill_mm: For kind='mold_cast' with body_id: fill depth in mm (default: to the rim, or to the fill line of an upright pour box among the bodies)
         dissolvable_liner: For kind='mold': a rigid shell with a dissolvable liner (two-material 3MF; liner_material picks the filaments)
@@ -1542,7 +1552,7 @@ async def physics_add_simulation(
         sheet_mode, bend_radius_mm, k_factor, scale_factor: For kind='sheet': 'papercraft' (default), 'sheet_metal' or 'soft_goods', and the bend the brake makes (material_thickness_mm is the sheet)
         pipe_standard_id: For kind='tube': the pipe, default 'pvc_sch40_3_4'
         with_ids, joint_mode, tenon_corner_fit, cutter_dia_mm, tenon_length_mm, shoulder_mm, max_board_width_mm, stock_length_mm, tabletop_clips, cnc_bed_mm: For kind='timber', with body_id and clearance_mm: the parts and the joinery
-        out_dir: Where to write a lined mold's 3MF
+        out_dir: Where to write kind='mold' print files (the lined mold's .3mf or the unlined/separable mold's casting-mold.stl)
     """
     payload = compact_dict(
         kind=kind,
@@ -1554,6 +1564,8 @@ async def physics_add_simulation(
         moldType=mold_type,
         allowUndercuts=allow_undercuts,
         trimChannels=trim_channels,
+        orientUpright=orient_upright,
+        airAware=air_aware,
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
         finishingToolType=finishing_tool_type,
@@ -1597,6 +1609,10 @@ async def physics_add_simulation(
         masterId=master_id,
         method=method,
         silicone=silicone,
+        splitSleeve=split_sleeve,
+        coverMm=cover_mm,
+        siliconeBudgetG=silicone_budget_g,
+        shape=shape,
         hole=hole,
         holeDiaMm=hole_dia_mm,
         holeAtMm=hole_at_mm,
@@ -1618,7 +1634,7 @@ async def physics_add_simulation(
         stockLengthMm=stock_length_mm,
         tabletopClips=tabletop_clips,
         cncBedMm=cnc_bed_mm,
-        includeFiles=True if out_dir is not None else None,
+        includeFiles=out_dir is not None,
     )
     # Plans the job, then cuts it out of the stock on the tab's export worker.
     result = await get_conn(Ph).send("ADD_SIMULATION", payload, timeout=300.0)
