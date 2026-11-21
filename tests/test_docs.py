@@ -13,6 +13,7 @@ importing the server, because importing it starts a websocket hub.
 """
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -109,6 +110,11 @@ def test_bundled_copy_matches_the_app_when_it_is_checked_out(app_id, repo):
         else None
     )
     app_file = wt_file if (wt_file and wt_file.exists()) else Path.home() / repo / "mcp-docs.json"
+    # Another checkout of the app (a git worktree that has not merged yet), by
+    # path to its mcp-docs.json: MCP_APP_DOCS_<REPO>, e.g. MCP_APP_DOCS_MESH.
+    override = os.environ.get(f"MCP_APP_DOCS_{repo.upper()}")
+    if override:
+        app_file = Path(override)
     if not app_file.exists():
         pytest.skip(f"{repo} is not checked out beside this server")
 
@@ -125,6 +131,17 @@ def test_bundled_copy_matches_the_app_when_it_is_checked_out(app_id, repo):
         f"{app_id}: the app documents tools the bundled copy does not: "
         f"{sorted(app_tools - our_tools)}"
     )
+
+    if app_id == "physics":
+        # Tool names agreeing is not enough: Mesh's two copies once agreed on every
+        # name while the bundled one carried a nodeFields entry the app had never
+        # shipped (and lacked the acoustics fields the app had). Byte-for-byte
+        # content, so what an agent reads from the server is what the app says.
+        assert app == ours, (
+            "physics: the app's mcp-docs.json and the bundled mcp-docs/physics.json differ; "
+            "copy the app's file over the bundled one (cp ~/mesh/mcp-docs.json "
+            "physbox_mcp/mcp-docs/physics.json) after editing the app's."
+        )
 
 
 def test_hierarchical_tool_docs_and_sections():

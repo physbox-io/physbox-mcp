@@ -2346,7 +2346,12 @@ async def physics_set_environment(
     stock_width_mm: float | None = None,
     stock_depth_mm: float | None = None,
     stock_thickness_mm: float | None = None,
+    sound: bool | None = None,
+    reverb: bool | None = None,
+    water_level: float | bool | None = None,
 ) -> Any:
+    # sound / reverb: the app's audio switches. water_level: free-surface height
+    # in metres; False removes the water (None, as for every argument, means "leave it").
     payload = compact_dict(
         gravityZ=gravityZ,
         windX=windX,
@@ -2359,6 +2364,9 @@ async def physics_set_environment(
         stockWidthMm=stock_width_mm,
         stockDepthMm=stock_depth_mm,
         stockThicknessMm=stock_thickness_mm,
+        sound=sound,
+        reverb=reverb,
+        waterLevel=water_level,
     )
     return await get_conn(Ph).send("SET_ENVIRONMENT", payload)
 
