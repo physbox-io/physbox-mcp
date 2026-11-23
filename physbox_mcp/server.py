@@ -74,7 +74,7 @@ def compact_dict(**kwargs) -> dict:
     """Return a dictionary containing only non-None values."""
     return {k: v for k, v in kwargs.items() if v is not None}
 
-def _deliver_export(result: Any, out_dir: str | None) -> dict:
+def _deliver_export(result: Any, out_dir: str | None, extra_keys: tuple[str, ...] = ()) -> dict:
     """Turn an export reply into something an agent can actually hold.
 
     The browser hands back whole files as base64 — an STL or a G-code program is
@@ -121,6 +121,9 @@ def _deliver_export(result: Any, out_dir: str | None) -> dict:
         "warnings": result.get("warnings") or [],
         "files": out,
     }
+    for key in extra_keys:
+        if key in result:
+            delivered[key] = result[key]
     if target is None and out:
         delivered["note"] = (
             "File contents were not returned (they are far too large for a tool result). "
@@ -895,7 +898,7 @@ async def use_session(port: int, session_id: str) -> Any:
 async def physics_export_cast(
     metal: str = "aluminium",
     method: str = "sand",
-    parting_from_base_mm: float | None = None,
+    parting_from_base_mm: float | str | None = None,
     add_gating: bool = True,
     sprue_dia_mm: float = 0,
     sprue_at_mm: list[float] | None = None,
@@ -927,7 +930,7 @@ async def physics_export_cast(
     # 180s because this is real geometry work in a worker, not a state read: a
     # slicing pass over a dense mesh will blow straight through the usual 60.
     result = await get_conn(Ph).send("EXPORT_CAST", payload, timeout=180.0)
-    return _deliver_export(result, out_dir)
+    return _deliver_export(result, out_dir, extra_keys=("molded",))
 
 @mcp.tool(description=get_doc(physics_docs, "physics_export_print", (
     "Export the Mesh scene, or the bodies in ids, as an STL or 3MF print file at true size in mm. "
@@ -1087,7 +1090,7 @@ async def physics_set_cast_prep(
     draft_mode: str = "add",
     edges: bool = True,
     edge_size_mm: float | None = None,
-    parting_from_base_mm: float | None = None,
+    parting_from_base_mm: float | str | None = None,
     off: bool = False,
     bake: bool = False,
 ) -> Any:
@@ -1173,6 +1176,7 @@ async def physics_timber_breakdown(
     tenon_cut_method: str | None = None,
     edge_profile: str | None = None,
     edge_radius_mm: float | None = None,
+    stop_margin_mm: float | None = None,
     tabletop_clips: bool | None = None,
     cnc_bed_mm: list[float] | None = None,
     stock_length_mm: float | None = None,
@@ -1203,6 +1207,7 @@ async def physics_timber_breakdown(
         tenonCutMethod=tenon_cut_method,
         edgeProfile=edge_profile,
         edgeRadiusMm=edge_radius_mm,
+        stopMarginMm=stop_margin_mm,
         tabletopClips=tabletop_clips,
         cncBedMm=cnc_bed_mm,
         stockLengthMm=stock_length_mm,
@@ -1264,7 +1269,7 @@ async def physics_export_machining(
     finishing_tool_dia_mm: float | None = None,
     material: str = "aluminium",
     finishing_tool_type: str = "flat",
-    setups: str | int | None = None,
+    setups: str | int | list[str] | None = None,
     clearance_mm: float | None = None,
     tool_stickout_mm: float | None = None,
     master_id: str | None = None,
@@ -1328,7 +1333,7 @@ async def physics_export_relief(
     # Planning samples the model and machines the whole surface twice over on
     # the tab's export worker; a big relief at a fine stepover takes a while.
     result = await get_conn(Ph).send("EXPORT_RELIEF", payload, timeout=300.0)
-    return _deliver_export(result, out_dir)
+    return _deliver_export(result, out_dir, extra_keys=("optionsFrom",))
 
 @mcp.tool(description=get_doc(physics_docs, "physics_export_cut", (
     "Lay the Mesh scene out flat as SVG, as the bottom bar's Etch button and the 2D dialogs do: "
@@ -1433,10 +1438,12 @@ async def physics_add_simulation(
     roughing_tool_dia_mm: float | None = None,
     finishing_tool_dia_mm: float | None = None,
     finishing_tool_type: str | None = None,
+    roughing_strategy: str | None = None,
+    roughing_enabled: bool | None = None,
     carve_depth_mm: float | None = None,
     material: str | None = None,
     sides: int | None = None,
-    setups: str | int | None = None,
+    setups: str | int | list[str] | None = None,
     stage: str | int | None = None,
     clearance_mm: float | None = None,
     tool_stickout_mm: float | None = None,
@@ -1445,6 +1452,7 @@ async def physics_add_simulation(
     machine: str | None = None,
     bit_dia_mm: float | None = None,
     vertical_scale_mode: str | None = None,
+    vertical_exaggeration: float | None = None,
     fit_mode: str | None = None,
     background_mode: str | None = None,
     pour_direction: str | None = None,
@@ -1486,6 +1494,8 @@ async def physics_add_simulation(
     draft_deg: float | None = None,
     draft_mode: str | None = None,
     shrink_percent: float | None = None,
+    add_gating: bool | None = None,
+    cope_drag_height_mm: float | None = None,
     sheet_mode: str | None = None,
     bend_radius_mm: float | None = None,
     k_factor: float | None = None,
@@ -1557,6 +1567,7 @@ async def physics_add_simulation(
     payload = compact_dict(
         kind=kind,
         verticalScaleMode=vertical_scale_mode,
+        verticalExaggeration=vertical_exaggeration,
         fitMode=fit_mode,
         backgroundMode=background_mode,
         placement=placement,
@@ -1569,6 +1580,8 @@ async def physics_add_simulation(
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
         finishingToolType=finishing_tool_type,
+        roughingStrategy=roughing_strategy,
+        roughingEnabled=roughing_enabled,
         carveDepthMm=carve_depth_mm,
         material=material,
         sides=sides,
@@ -1619,6 +1632,8 @@ async def physics_add_simulation(
         draftDeg=draft_deg,
         draftMode=draft_mode,
         shrinkPercent=shrink_percent,
+        addGating=add_gating,
+        copeDragHeightMm=cope_drag_height_mm,
         sheetMode=sheet_mode,
         bendRadiusMm=bend_radius_mm,
         kFactor=k_factor,
@@ -2296,6 +2311,13 @@ async def physics_import_profile(
         svg=svg, imageData=imageData, name=name, widthMm=widthMm, heightMm=heightMm,
         thicknessMm=thicknessMm, threshold=threshold, subject=subject, detail=detail, pos=pos,
     )
+    raw_len = len(svg.encode("utf-8")) if isinstance(svg, str) else (len(imageData.encode("utf-8")) if isinstance(imageData, str) else 0)
+    if not is_primary and raw_len > WS_MAX_MESSAGE - 64 * 1024:
+        raise RuntimeError(
+            f"The profile payload is {raw_len / 1e6:.1f} MB as a command, over the hub's {WS_MAX_MESSAGE // (1024 * 1024)} MB "
+            "limit for commands relayed from a secondary MCP session. Import it from the session that owns the hub "
+            "(the first one started), or import it directly in the app."
+        )
     return await get_conn(Ph).send("IMPORT_PROFILE", payload, timeout=60.0)
 
 _IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
@@ -2776,6 +2798,7 @@ async def physics_set_impact(
     geom_name: str | None = None,
     clear_shatter: bool = False,
     clear_dent: bool = False,
+    clear_pierce: bool = False,
 ) -> Any:
     payload: dict[str, Any] = {"targetId": id}
     if clear_shatter:
@@ -2795,11 +2818,14 @@ async def physics_set_impact(
         payload["dentYieldNs"] = None
     elif dent_yield_ns is not None:
         payload["dentYieldNs"] = dent_yield_ns
+    if clear_pierce:
+        payload["pierceImpulseNs"] = None
+    elif pierce_impulse_ns is not None:
+        payload["pierceImpulseNs"] = pierce_impulse_ns
     for key, value in (
         ("dentDepthPerNs", dent_depth_per_ns),
         ("dentRadius", dent_radius),
         ("dentMaxDepth", dent_max_depth),
-        ("pierceImpulseNs", pierce_impulse_ns),
         ("deformCollision", deform_collision),
         ("geomName", geom_name),
     ):
@@ -3046,7 +3072,7 @@ async def physics_cut(
 @mcp.tool(description=get_doc(physics_docs, "physics_add_hardware", "Put a bought part in the scene: a bearing, screw, nut, shaft, O-ring, rail, runner, extrusion, spring or stepper"))
 async def physics_add_hardware(
     kind: str | None = None,
-    size: str | None = None,
+    size: str | int | float | None = None,
     lengthMm: float | None = None,
     washer: bool | None = None,
     into: str | None = None,
@@ -3056,8 +3082,9 @@ async def physics_add_hardware(
     id: str | None = None,
     between: list[str] | None = None,
 ) -> Any:
+    norm_size = str(size) if isinstance(size, (int, float)) and not isinstance(size, bool) else size
     payload = compact_dict(
-        kind=kind, size=size, lengthMm=lengthMm, washer=washer, into=into, group=group, at=at,
+        kind=kind, size=norm_size, lengthMm=lengthMm, washer=washer, into=into, group=group, at=at,
         # partId, not id: the envelope's request id would overwrite it.
         fixTo=fixTo, partId=id, between=between,
     )
@@ -3271,19 +3298,24 @@ async def physics_machine_probe_surface(
 async def physics_machine_frame_job(
     safeZMm: float | None = None,
     guidePower: float | None = None,
+    bounds: dict | None = None,
 ) -> Any:
     return await get_conn(Ph).send(
-        "MACHINE_FRAME_JOB", compact_dict(safeZMm=safeZMm, guidePower=guidePower), timeout=600.0
+        "MACHINE_FRAME_JOB", compact_dict(safeZMm=safeZMm, guidePower=guidePower, bounds=bounds), timeout=600.0
     )
 
 @mcp.tool(description=get_doc(physics_docs, "physics_carve_scene", "Machine one side of the scene that is loaded"))
 async def physics_carve_scene(
-    side: int | None = None,
+    side: int | str | None = None,
+    setup: int | None = None,
     toolDiaMm: float | None = None,
     roughingToolDiaMm: float | None = None,
     finishingToolDiaMm: float | None = None,
+    finishingToolType: str | None = None,
     sides: int | None = None,
     setups: str | int | list[str] | None = None,
+    clearanceMm: float | None = None,
+    toolStickoutMm: float | None = None,
     stockThicknessMm: float | None = None,
     material: str | None = None,
     acceptUnreachable: bool | None = None,
@@ -3293,9 +3325,11 @@ async def physics_carve_scene(
     return await get_conn(Ph).send(
         "CARVE_SCENE",
         compact_dict(
-            side=side, toolDiaMm=toolDiaMm,
+            side=side, setup=setup, toolDiaMm=toolDiaMm,
             roughingToolDiaMm=roughingToolDiaMm, finishingToolDiaMm=finishingToolDiaMm,
+            finishingToolType=finishingToolType,
             sides=sides, setups=setups,
+            clearanceMm=clearanceMm, toolStickoutMm=toolStickoutMm,
             stockThicknessMm=stockThicknessMm, material=material,
             acceptUnreachable=acceptUnreachable,
         ),
