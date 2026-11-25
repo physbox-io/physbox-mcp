@@ -3094,6 +3094,7 @@ async def physics_add_hardware(
 async def physics_build_mechanism(
     family: str,
     origin: list[float] | None = None,
+    axis: list[float] | None = None,
     idPrefix: str | None = None,
     actuate: bool | None = None,
     speed: float | None = None,
@@ -3107,7 +3108,7 @@ async def physics_build_mechanism(
     payload = {
         **(spec or {}),
         **compact_dict(
-            family=family, origin=origin, idPrefix=idPrefix, actuate=actuate, speed=speed,
+            family=family, origin=origin, axis=axis, idPrefix=idPrefix, actuate=actuate, speed=speed,
             torqueLimitNm=torqueLimitNm, arborId=arborId, axialOffsetMm=axialOffsetMm,
         ),
     }
