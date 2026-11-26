@@ -1276,6 +1276,9 @@ async def physics_export_machining(
     setups: str | int | list[str] | None = None,
     clearance_mm: float | None = None,
     tool_stickout_mm: float | None = None,
+    finishing_flute_length_mm: float | None = None,
+    finishing_shank_dia_mm: float | None = None,
+    tool_body_clearance: bool | None = None,
     master_id: str | None = None,
     out_dir: str | None = None,
 ) -> Any:
@@ -1287,6 +1290,9 @@ async def physics_export_machining(
         setups=setups,
         clearanceMm=clearance_mm,
         toolStickoutMm=tool_stickout_mm,
+        finishingFluteLengthMm=finishing_flute_length_mm,
+        finishingShankDiaMm=finishing_shank_dia_mm,
+        toolBodyClearance=tool_body_clearance,
         toolDiaMm=tool_dia_mm,
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
@@ -1298,10 +1304,11 @@ async def physics_export_machining(
     return _deliver_export(result, out_dir)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_export_relief", (
-    "Plan a relief carve of the current Mesh scene as the Relief Carve dialog would, and report "
-    "the roughing/finishing split, the estimate and the tool-change line. Uses the dialog's last "
-    "settings unless told otherwise. Carves master_id (comma-separated for several), else every body. "
-    "The stock is the bench board, set with physics_set_environment. "
+    "Plan a relief carve of the current Mesh scene as the Relief Carve dialog would — including "
+    "optional cut-through with holding tabs (`cut_through_mm`, `holding_tabs`) to cut the part out "
+    "of the board — and report the roughing/finishing split, the estimate and the tool-change line. "
+    "Uses the dialog's last settings unless told otherwise. Carves master_id (comma-separated for "
+    "several), else every body. The stock is the bench board, set with physics_set_environment. "
     "Pass out_dir to get relief-carve.nc written there."
 )))
 async def physics_export_relief(
@@ -1316,6 +1323,13 @@ async def physics_export_relief(
     vertical_exaggeration: float | None = None,
     fit_mode: str | None = None,
     background_mode: str | None = None,
+    cut_through_mm: float | None = None,
+    holding_tabs: bool | None = None,
+    tab_height_mm: float | None = None,
+    tab_width_mm: float | None = None,
+    finishing_flute_length_mm: float | None = None,
+    finishing_shank_dia_mm: float | None = None,
+    tool_body_clearance: bool | None = None,
     master_id: str | None = None,
     out_dir: str | None = None,
 ) -> Any:
@@ -1324,6 +1338,13 @@ async def physics_export_relief(
         verticalExaggeration=vertical_exaggeration,
         fitMode=fit_mode,
         backgroundMode=background_mode,
+        cutThroughMm=cut_through_mm,
+        holdingTabs=holding_tabs,
+        tabHeightMm=tab_height_mm,
+        tabWidthMm=tab_width_mm,
+        finishingFluteLengthMm=finishing_flute_length_mm,
+        finishingShankDiaMm=finishing_shank_dia_mm,
+        toolBodyClearance=tool_body_clearance,
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
         finishingToolType=finishing_tool_type,
