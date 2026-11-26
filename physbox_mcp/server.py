@@ -1273,7 +1273,17 @@ async def physics_export_machining(
     finishing_tool_dia_mm: float | None = None,
     material: str = "aluminium",
     finishing_tool_type: str = "flat",
+    finishing_v_bit_angle_deg: float | None = None,
+    finishing_strategy: str | None = None,
+    roughing_enabled: bool | None = None,
+    finishing_enabled: bool | None = None,
     setups: str | int | list[str] | None = None,
+    up: str | None = None,
+    auto_orient: bool | None = None,
+    max_setups: int | None = None,
+    tab_count: int | None = None,
+    registration_pins: bool | None = None,
+    pin_dia_mm: float | None = None,
     clearance_mm: float | None = None,
     tool_stickout_mm: float | None = None,
     finishing_flute_length_mm: float | None = None,
@@ -1288,6 +1298,12 @@ async def physics_export_machining(
         masterId=master_id,
         # 'auto', 1, 2, or faces as '+z,+x,-x'; when given it plans the setups instead of sides.
         setups=setups,
+        up=up,
+        autoOrient=auto_orient,
+        maxSetups=max_setups,
+        tabCount=tab_count,
+        registrationPins=registration_pins,
+        pinDiaMm=pin_dia_mm,
         clearanceMm=clearance_mm,
         toolStickoutMm=tool_stickout_mm,
         finishingFluteLengthMm=finishing_flute_length_mm,
@@ -1298,6 +1314,10 @@ async def physics_export_machining(
         finishingToolDiaMm=finishing_tool_dia_mm,
         material=material,
         finishingToolType=finishing_tool_type,
+        finishingVBitAngleDeg=finishing_v_bit_angle_deg,
+        finishingStrategy=finishing_strategy,
+        roughingEnabled=roughing_enabled,
+        finishingEnabled=finishing_enabled,
         includeFiles=out_dir is not None,
     )
     result = await get_conn(Ph).send("EXPORT_MACHINING", payload, timeout=180.0)
@@ -1315,6 +1335,7 @@ async def physics_export_relief(
     roughing_tool_dia_mm: float | None = None,
     finishing_tool_dia_mm: float | None = None,
     finishing_tool_type: str | None = None,
+    finishing_v_bit_angle_deg: float | None = None,
     carve_depth_mm: float | None = None,
     material: str | None = None,
     roughing_strategy: str | None = None,
@@ -1348,6 +1369,7 @@ async def physics_export_relief(
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
         finishingToolType=finishing_tool_type,
+        finishingVBitAngleDeg=finishing_v_bit_angle_deg,
         carveDepthMm=carve_depth_mm,
         material=material,
         roughingStrategy=roughing_strategy,
@@ -1479,6 +1501,7 @@ async def physics_add_simulation(
     roughing_tool_dia_mm: float | None = None,
     finishing_tool_dia_mm: float | None = None,
     finishing_tool_type: str | None = None,
+    finishing_v_bit_angle_deg: float | None = None,
     roughing_strategy: str | None = None,
     roughing_enabled: bool | None = None,
     carve_depth_mm: float | None = None,
@@ -1488,6 +1511,13 @@ async def physics_add_simulation(
     stage: str | int | None = None,
     clearance_mm: float | None = None,
     tool_stickout_mm: float | None = None,
+    finishing_flute_length_mm: float | None = None,
+    finishing_shank_dia_mm: float | None = None,
+    tool_body_clearance: bool | None = None,
+    cut_through_mm: float | None = None,
+    holding_tabs: bool | None = None,
+    tab_height_mm: float | None = None,
+    tab_width_mm: float | None = None,
     tool_dia_mm: float | None = None,
     material_thickness_mm: float | None = None,
     machine: str | None = None,
@@ -1621,6 +1651,7 @@ async def physics_add_simulation(
         roughingToolDiaMm=roughing_tool_dia_mm,
         finishingToolDiaMm=finishing_tool_dia_mm,
         finishingToolType=finishing_tool_type,
+        finishingVBitAngleDeg=finishing_v_bit_angle_deg,
         roughingStrategy=roughing_strategy,
         roughingEnabled=roughing_enabled,
         carveDepthMm=carve_depth_mm,
@@ -1630,6 +1661,13 @@ async def physics_add_simulation(
         stage=stage,
         clearanceMm=clearance_mm,
         toolStickoutMm=tool_stickout_mm,
+        finishingFluteLengthMm=finishing_flute_length_mm,
+        finishingShankDiaMm=finishing_shank_dia_mm,
+        toolBodyClearance=tool_body_clearance,
+        cutThroughMm=cut_through_mm,
+        holdingTabs=holding_tabs,
+        tabHeightMm=tab_height_mm,
+        tabWidthMm=tab_width_mm,
         toolDiaMm=tool_dia_mm,
         materialThicknessMm=material_thickness_mm,
         machine=machine,
@@ -2368,6 +2406,7 @@ _IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"
 @mcp.tool(description=get_doc(physics_docs, "physics_set_reference_image", "Pin a picture in the viewport to model from"))
 async def physics_set_reference_image(
     path: str | None = None,
+    image: str | None = None,
     imageId: str | None = None,
     name: str | None = None,
     plane: str | None = None,
@@ -2380,7 +2419,6 @@ async def physics_set_reference_image(
     remove: bool = False,
     clear: bool = False,
 ) -> Any:
-    image = None
     if path is not None:
         file = _local_path(path)
         if not file.is_file():
@@ -2929,7 +2967,7 @@ async def physics_get_breaks() -> Any:
 
 @mcp.tool(description=get_doc(physics_docs, "physics_restore_break", "Put a broken weld back"))
 async def physics_restore_break(key: str | None = None) -> Any:
-    return await get_conn(Ph).send("RESTORE_BREAK", {"key": key} if key else {}, timeout=60.0)
+    return await get_conn(Ph).send("RESTORE_BREAK", {"key": key} if key is not None else {}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_probe_sculpt", "Find the surface nearest some points"))
 async def physics_probe_sculpt(
