@@ -213,3 +213,42 @@ def test_physics_docs_parameter_parity_and_contradiction_fixes():
     state_blob = json.dumps(tools["physics_get_state"])
     for key in ("gravityZ", "windX", "windY", "floorFriction", "floorBounce"):
         assert key in state_blob
+
+
+def test_new_fab_and_flexure_params_and_docs():
+    ns, sent = _load_server_fns(
+        "physics_split_for_print",
+        "physics_export_cut",
+        "physics_check_dfm",
+        "physics_cut",
+    )
+
+    asyncio.run(ns["physics_split_for_print"](body_id="hull", name="HullSection", apply=True))
+    assert sent[-1][1]["name"] == "HullSection"
+
+    asyncio.run(ns["physics_export_cut"](kind="panels", master_id="lid", include_children=False))
+    assert sent[-1][1]["includeChildren"] is False
+
+    asyncio.run(ns["physics_check_dfm"](process="print", master_id="a,b", bed_mm=[250, 250, 250], include_children=False))
+    assert sent[-1][1]["bedMm"] == [250, 250, 250]
+    assert sent[-1][1]["includeChildren"] is False
+
+    asyncio.run(ns["physics_cut"](id="plate", shape="countersink", size="M4", angleDeg=82))
+    assert sent[-1][1]["angleDeg"] == 82
+
+    docs = json.loads(BUNDLED_PHYSICS.read_text(encoding="utf-8"))
+    tools = docs["tools"]
+    assert "`name`" in json.dumps(tools["physics_split_for_print"])
+    assert "include_children" in json.dumps(tools["physics_export_cut"])
+    dfm_blob = json.dumps(tools["physics_check_dfm"])
+    for key in ("bed_mm", "include_children", "bronze", "aluminium", "pewter", "zinc", "iron", "air-gap"):
+        assert key in dfm_blob
+    assert "countersink" in json.dumps(tools["physics_cut"])
+    assert "angleDeg" in json.dumps(tools["physics_cut"])
+    hw_blob = json.dumps(tools["physics_add_hardware"])
+    for key in ("butt_hinge", "hasp_latch", "handle", "wood_screw", "corner_bracket"):
+        assert key in hw_blob
+    mech_blob = json.dumps(tools["physics_build_mechanism"])
+    for key in ("compliant_gripper", "parallel_flexure", "cantilever_pawl", "monolithicPrint"):
+        assert key in mech_blob
+    assert "flexure" in docs["schema"]["nodeFields"]["features"]

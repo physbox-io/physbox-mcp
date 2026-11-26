@@ -1129,6 +1129,7 @@ async def physics_split_for_print(
     apply: bool = False,
     placement: str | None = None,
     center_origin: bool = False,
+    name: str | None = None,
 ) -> Any:
     payload = compact_dict(
         bodyId=body_id,
@@ -1145,6 +1146,7 @@ async def physics_split_for_print(
         apply=apply or None,
         placement=placement,
         centerOrigin=center_origin or None,
+        name=name,
     )
     # The search builds hundreds of solids for a big part, and an assembly test
     # is a MuJoCo run per joint; both are worker jobs measured in seconds.
@@ -1344,6 +1346,7 @@ async def physics_export_relief(
 async def physics_export_cut(
     kind: str = "panels",
     master_id: str | None = None,
+    include_children: bool | None = None,
     machine: str | None = None,
     sheet_mode: str | None = None,
     thickness_mm: float | None = None,
@@ -1359,6 +1362,7 @@ async def physics_export_cut(
     payload = compact_dict(
         kind=kind,
         masterId=master_id,
+        includeChildren=include_children,
         machine=machine,
         sheetMode=sheet_mode,
         thicknessMm=thickness_mm,
@@ -1415,9 +1419,15 @@ async def physics_check_dfm(
     process: str | None = None,
     master_id: str | None = None,
     cast_material: str | None = None,
+    bed_mm: list[float] | None = None,
+    include_children: bool | None = None,
 ) -> Any:
     return await get_conn(Ph).send("CHECK_DFM", compact_dict(
-        process=process, masterId=master_id, castMaterial=cast_material,
+        process=process,
+        masterId=master_id,
+        castMaterial=cast_material,
+        bedMm=bed_mm,
+        includeChildren=include_children,
     ), timeout=120.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_add_simulation", (
@@ -3048,6 +3058,7 @@ async def physics_cut(
     size: str | None = None,
     bore: str | None = None,
     fitMm: float | None = None,
+    angleDeg: float | None = None,
     outline: str | None = None,
     cornerRadiusMm: float | None = None,
     floor: str | None = None,
@@ -3062,7 +3073,7 @@ async def physics_cut(
         targetId=id, shape=shape, at=at, normal=normal,
         diameterMm=diameterMm, widthMm=widthMm, lengthMm=lengthMm, depthMm=depthMm,
         threadPitchMm=threadPitchMm, threadLeft=threadLeft, threadFitMm=threadFitMm,
-        size=size, bore=bore, fitMm=fitMm,
+        size=size, bore=bore, fitMm=fitMm, angleDeg=angleDeg,
         outline=outline, cornerRadiusMm=cornerRadiusMm, floor=floor, floorRadiusMm=floorRadiusMm,
         seal=seal, turned=turned, quarter=quarter, facing=facing,
         cuts=cuts,
