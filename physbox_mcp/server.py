@@ -2480,8 +2480,12 @@ async def physics_set_camera(
     target: list[float] | None = None,
     preset: str | None = None,
     dims: bool | None = None,
+    clear_selection: bool | None = None,
 ) -> Any:
-    payload = compact_dict(preset=preset, position=position, target=target, dims=dims)
+    payload = compact_dict(
+        preset=preset, position=position, target=target, dims=dims,
+        clearSelection=clear_selection,
+    )
     return await get_conn(Ph).send("SET_CAMERA", payload)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_screenshot", "Capture current rendered frame of 3D viewport as a PNG image."))
