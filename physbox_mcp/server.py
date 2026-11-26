@@ -1242,6 +1242,7 @@ async def physics_build_brickwork(
     toy_inventory: dict[str, int | None] | None = None,
     hollow_studs: int | None = None,
     placement: str = "beside",
+    include_mortar: bool | None = None,
 ) -> Any:
     payload = compact_dict(
         bodyId=body_id,
@@ -1253,6 +1254,7 @@ async def physics_build_brickwork(
         toyInventory=toy_inventory,
         hollowStuds=hollow_studs,
         placement=placement,
+        includeMortar=include_mortar,
     )
     # Laid in a worker; a house is seconds, and settling thousands of bricks into the scene more.
     return await get_conn(Ph).send("BUILD_BRICKWORK", payload, timeout=180.0)
@@ -1349,6 +1351,9 @@ async def physics_export_cut(
     include_children: bool | None = None,
     machine: str | None = None,
     sheet_mode: str | None = None,
+    sheet_preset: str | None = None,
+    group_by_color: bool | None = None,
+    one_part_per_sheet: bool | None = None,
     thickness_mm: float | None = None,
     bend_radius_mm: float | None = None,
     k_factor: float | None = None,
@@ -1365,6 +1370,9 @@ async def physics_export_cut(
         includeChildren=include_children,
         machine=machine,
         sheetMode=sheet_mode,
+        sheetPreset=sheet_preset,
+        groupByColor=group_by_color,
+        onePartPerSheet=one_part_per_sheet,
         thicknessMm=thickness_mm,
         bendRadiusMm=bend_radius_mm,
         kFactor=k_factor,
@@ -2383,6 +2391,7 @@ async def physics_set_reference_image(
 
 @mcp.tool(description=get_doc(physics_docs, "physics_set_environment", "Set environment parameters"))
 async def physics_set_environment(
+    name: str | None = None,
     gravityZ: float | None = None,
     windX: float | None = None,
     windY: float | None = None,
@@ -2401,6 +2410,7 @@ async def physics_set_environment(
     # sound / reverb: the app's audio switches. water_level: free-surface height
     # in metres; False removes the water (None, as for every argument, means "leave it").
     payload = compact_dict(
+        name=name,
         gravityZ=gravityZ,
         windX=windX,
         windY=windY,
@@ -2419,8 +2429,11 @@ async def physics_set_environment(
     return await get_conn(Ph).send("SET_ENVIRONMENT", payload)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_update_scene", "Replace scene graph"))
-async def physics_update_scene(sceneGraph: list[Any] | dict[str, Any]) -> Any:
-    return await get_conn(Ph).send("UPDATE_SCENE", {"sceneGraph": sceneGraph}, timeout=60.0)
+async def physics_update_scene(
+    sceneGraph: list[Any] | dict[str, Any],
+    name: str | None = None,
+) -> Any:
+    return await get_conn(Ph).send("UPDATE_SCENE", compact_dict(sceneGraph=sceneGraph, name=name), timeout=60.0)
 
 def _local_path(path: str) -> Path:
     """The path as given, on whatever OS the server runs. One fallback, only for a
@@ -2494,9 +2507,10 @@ async def physics_get_screenshot(
     show_edges: bool | None = None,
     wireframe: bool | None = None,
     clean: bool | None = None,
+    scale: float | None = None,
 ) -> Any:
     result = await get_conn(Ph).send("SCREENSHOT", compact_dict(
-        showColliders=show_colliders, showEdges=show_edges, wireframe=wireframe, clean=clean))
+        showColliders=show_colliders, showEdges=show_edges, wireframe=wireframe, clean=clean, scale=scale), timeout=30.0)
     if not isinstance(result, dict) or not result.get("ok"):
         error = result.get("error") if isinstance(result, dict) else "Unknown error"
         raise RuntimeError(f"Screenshot failed: {error}")
@@ -2586,25 +2600,35 @@ async def physics_update_object(id: str, updates: dict) -> Any:
     return await get_conn(Ph).send("UPDATE_OBJECT", {"targetId": id, "updates": updates}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_set_color", "Set a body's base colour"))
-async def physics_set_color(id: str, rgba: list[float], geomName: str | None = None) -> Any:
-    return await get_conn(Ph).send("SET_COLOR", {"targetId": id, "rgba": rgba, "geomName": geomName}, timeout=60.0)
+async def physics_set_color(
+    id: str | None = None,
+    rgba: list[float] | None = None,
+    geomName: str | None = None,
+    colors: list[dict[str, Any]] | None = None,
+) -> Any:
+    payload = compact_dict(targetId=id, rgba=rgba, geomName=geomName, colors=colors)
+    return await get_conn(Ph).send("SET_COLOR", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_paint", "Brush colour onto part of a geom's surface"))
 async def physics_paint(
     id: str,
     at: list[Any] | None = None,
+    atMm: list[Any] | None = None,
     rgba: list[float] | None = None,
     radius: float = 0.008,
+    radiusMm: float | None = None,
     geomName: str | None = None,
     flow: float = 1.0,
     erase: bool = False,
     strokes: list[dict[str, Any]] | None = None,
     line: bool | None = None,
     hardness: float | None = None,
+    symmetry: str | None = None,
 ) -> Any:
     payload = compact_dict(
-        targetId=id, at=at, rgba=rgba, radius=radius, geomName=geomName,
-        flow=flow, erase=erase, strokes=strokes, line=line, hardness=hardness,
+        targetId=id, at=at, atMm=atMm, rgba=rgba, radius=radius, radiusMm=radiusMm,
+        geomName=geomName, flow=flow, erase=erase, strokes=strokes, line=line,
+        hardness=hardness, symmetry=symmetry,
     )
     return await get_conn(Ph).send("PAINT", payload, timeout=60.0)
 
@@ -2717,9 +2741,11 @@ async def physics_resize_sculpt(
 async def physics_sculpt(
     id: str,
     at: list[Any] | None = None,
+    atMm: list[Any] | None = None,
     brush: str = "draw",
     # None: the app picks a sixth of the body's longest side.
     radius: float | None = None,
+    radiusMm: float | None = None,
     strength: float = 0.5,
     invert: bool = False,
     symmetry: str | None = None,
@@ -2733,8 +2759,10 @@ async def physics_sculpt(
     payload = compact_dict(
         targetId=id,
         at=at,
+        atMm=atMm,
         brush=brush,
         radius=radius,
+        radiusMm=radiusMm,
         strength=strength,
         invert=invert,
         symmetry=symmetry,
@@ -2878,8 +2906,12 @@ async def physics_restore_break(key: str | None = None) -> Any:
     return await get_conn(Ph).send("RESTORE_BREAK", {"key": key} if key else {}, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_probe_sculpt", "Find the surface nearest some points"))
-async def physics_probe_sculpt(id: str, at: list[Any]) -> Any:
-    return await get_conn(Ph).send("PROBE_SCULPT", {"targetId": id, "at": at})
+async def physics_probe_sculpt(
+    id: str,
+    at: list[Any] | None = None,
+    atMm: list[Any] | None = None,
+) -> Any:
+    return await get_conn(Ph).send("PROBE_SCULPT", compact_dict(targetId=id, at=at, atMm=atMm))
 
 @mcp.tool(description=get_doc(physics_docs, "physics_undo_sculpt", "Undo the last sculpt stroke"))
 async def physics_undo_sculpt(id: str) -> Any:
@@ -2888,19 +2920,30 @@ async def physics_undo_sculpt(id: str) -> Any:
 @mcp.tool(description=get_doc(physics_docs, "physics_sculpt_cut", "Cut a hole through a sculpt, or a piece off it"))
 async def physics_sculpt_cut(
     id: str,
-    polygon: list[list[float]],
+    polygon: list[list[float]] | None = None,
     direction: list[float] | None = None,
     mode: str | None = None,
     cap: bool | None = None,
+    depthMm: float | None = None,
+    wallMm: float | None = None,
+    floorMm: float | None = None,
+    radiusMm: float | None = None,
+    center: list[float] | None = None,
+    segments: int | None = None,
 ) -> Any:
-    payload = compact_dict(targetId=id, polygon=polygon, direction=direction, mode=mode, cap=cap)
+    payload = compact_dict(
+        targetId=id, polygon=polygon, direction=direction, mode=mode, cap=cap,
+        depthMm=depthMm, wallMm=wallMm, floorMm=floorMm, radiusMm=radiusMm,
+        center=center, segments=segments,
+    )
     return await get_conn(Ph).send("SCULPT_CUT", payload, timeout=90.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_sculpt_carve", "Carve a groove into a sculpt along a path, or add a tube of clay"))
 async def physics_sculpt_carve(
     id: str,
-    path: list[Any],
     widthMm: float,
+    path: list[Any] | None = None,
+    pathMm: list[Any] | None = None,
     depthMm: float | None = None,
     profile: str | None = None,
     symmetry: str | None = None,
@@ -2912,7 +2955,7 @@ async def physics_sculpt_carve(
     flatAxis: str | None = None,
 ) -> Any:
     payload = compact_dict(
-        targetId=id, path=path, widthMm=widthMm, depthMm=depthMm, profile=profile,
+        targetId=id, path=path, pathMm=pathMm, widthMm=widthMm, depthMm=depthMm, profile=profile,
         symmetry=symmetry, fill=fill, taper=taper, angleDeg=angleDeg, mode=mode,
         thicknessMm=thicknessMm, flatAxis=flatAxis,
     )
@@ -3071,6 +3114,7 @@ async def physics_cut(
     turned: bool | None = None,
     quarter: int | None = None,
     facing: list[float] | None = None,
+    frame: str | None = None,
     cuts: list[dict[str, Any]] | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -3079,7 +3123,7 @@ async def physics_cut(
         threadPitchMm=threadPitchMm, threadLeft=threadLeft, threadFitMm=threadFitMm,
         size=size, bore=bore, fitMm=fitMm, angleDeg=angleDeg,
         outline=outline, cornerRadiusMm=cornerRadiusMm, floor=floor, floorRadiusMm=floorRadiusMm,
-        seal=seal, turned=turned, quarter=quarter, facing=facing,
+        seal=seal, turned=turned, quarter=quarter, facing=facing, frame=frame,
         cuts=cuts,
     )
     return await get_conn(Ph).send("BODY_CUT", payload, timeout=60.0)
@@ -3189,11 +3233,12 @@ async def physics_repair_mesh(
 async def physics_lattice_dimension(
     id: str,
     corners: list[Any],
-    axis: str,
-    valueMm: float,
-    mode: str = "size",
+    axis: str | None = None,
+    valueMm: float | None = None,
+    mode: str | None = None,
+    dimensions: list[dict[str, Any]] | None = None,
 ) -> Any:
-    payload = compact_dict(targetId=id, corners=corners, axis=axis, mode=mode, valueMm=valueMm)
+    payload = compact_dict(targetId=id, corners=corners, axis=axis, mode=mode, valueMm=valueMm, dimensions=dimensions)
     return await get_conn(Ph).send("LATTICE_DIMENSION", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_combine", "Merge other bodies into this one with a boolean"))
