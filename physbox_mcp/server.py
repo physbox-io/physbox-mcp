@@ -1354,6 +1354,7 @@ async def physics_export_cut(
     sheet_preset: str | None = None,
     group_by_color: bool | None = None,
     one_part_per_sheet: bool | None = None,
+    split_sheets: bool | None = None,
     thickness_mm: float | None = None,
     bend_radius_mm: float | None = None,
     k_factor: float | None = None,
@@ -1373,6 +1374,7 @@ async def physics_export_cut(
         sheetPreset=sheet_preset,
         groupByColor=group_by_color,
         onePartPerSheet=one_part_per_sheet,
+        splitSheets=split_sheets,
         thicknessMm=thickness_mm,
         bendRadiusMm=bend_radius_mm,
         kFactor=k_factor,
@@ -2584,8 +2586,8 @@ async def physics_get_telemetry() -> Any:
     return await get_conn(Ph).send("GET_TELEMETRY")
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_objects", "Return scene objects"))
-async def physics_get_objects() -> Any:
-    return await get_conn(Ph).send("GET_OBJECTS")
+async def physics_get_objects(names_only: bool | None = None) -> Any:
+    return await get_conn(Ph).send("GET_OBJECTS", compact_dict(namesOnly=names_only) or None)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_get_object", "Return single object by ID"))
 async def physics_get_object(
@@ -2604,11 +2606,12 @@ async def physics_update_object(id: str, updates: dict) -> Any:
 @mcp.tool(description=get_doc(physics_docs, "physics_set_color", "Set a body's base colour"))
 async def physics_set_color(
     id: str | None = None,
-    rgba: list[float] | None = None,
+    rgba: list[float] | str | None = None,
+    color: list[float] | str | None = None,
     geomName: str | None = None,
     colors: list[dict[str, Any]] | None = None,
 ) -> Any:
-    payload = compact_dict(targetId=id, rgba=rgba, geomName=geomName, colors=colors)
+    payload = compact_dict(targetId=id, rgba=rgba, color=color, geomName=geomName, colors=colors)
     return await get_conn(Ph).send("SET_COLOR", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_paint", "Brush colour onto part of a geom's surface"))
@@ -3084,8 +3087,12 @@ async def physics_lattice_sharpen(
     return await get_conn(Ph).send("LATTICE_SHARPEN", payload, timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_smooth", "Set a lattice body's smoothing level"))
-async def physics_lattice_smooth(id: str, level: int) -> Any:
-    return await get_conn(Ph).send("LATTICE_SMOOTH", {"targetId": id, "level": level}, timeout=60.0)
+async def physics_lattice_smooth(
+    id: str,
+    level: int | None = None,
+    subdiv: int | None = None,
+) -> Any:
+    return await get_conn(Ph).send("LATTICE_SMOOTH", compact_dict(targetId=id, level=level, subdiv=subdiv), timeout=60.0)
 
 @mcp.tool(description=get_doc(physics_docs, "physics_lattice_orient", "Turn every face outwards"))
 async def physics_lattice_orient(id: str) -> Any:
