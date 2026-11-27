@@ -2683,7 +2683,7 @@ async def physics_paint(
     id: str,
     at: list[Any] | None = None,
     atMm: list[Any] | None = None,
-    rgba: list[float] | None = None,
+    rgba: list[float] | str | None = None,
     radius: float = 0.008,
     radiusMm: float | None = None,
     geomName: str | None = None,
@@ -2693,11 +2693,13 @@ async def physics_paint(
     line: bool | None = None,
     hardness: float | None = None,
     symmetry: str | None = None,
+    normal: list[float] | None = None,
+    front_only: bool | None = None,
 ) -> Any:
     payload = compact_dict(
         targetId=id, at=at, atMm=atMm, rgba=rgba, radius=radius, radiusMm=radiusMm,
         geomName=geomName, flow=flow, erase=erase, strokes=strokes, line=line,
-        hardness=hardness, symmetry=symmetry,
+        hardness=hardness, symmetry=symmetry, normal=normal, frontOnly=front_only,
     )
     return await get_conn(Ph).send("PAINT", payload, timeout=60.0)
 
