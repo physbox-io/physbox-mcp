@@ -2573,9 +2573,12 @@ async def physics_get_screenshot(
     wireframe: bool | None = None,
     clean: bool | None = None,
     scale: float | None = None,
+    render: bool | None = None,
+    render_samples: int | None = None,
 ) -> Any:
     result = await get_conn(Ph).send("SCREENSHOT", compact_dict(
-        showColliders=show_colliders, showEdges=show_edges, wireframe=wireframe, clean=clean, scale=scale), timeout=30.0)
+        showColliders=show_colliders, showEdges=show_edges, wireframe=wireframe, clean=clean, scale=scale,
+        render=render, renderSamples=render_samples), timeout=90.0 if render else 30.0)
     if not isinstance(result, dict) or not result.get("ok"):
         error = result.get("error") if isinstance(result, dict) else "Unknown error"
         raise RuntimeError(f"Screenshot failed: {error}")
