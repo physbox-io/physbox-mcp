@@ -45,7 +45,7 @@ MCP_WS_PORT = int(os.environ.get("MCP_WS_PORT", "3142"))
 # and a browser takes whatever it is sent. So it binds on a tab's reply, and on a
 # command a secondary peer forwards to the primary — physics_load_scene_file's
 # scene, sent from a peer, is the one that gets near it.
-WS_MAX_MESSAGE = 32 * 1024 * 1024
+WS_MAX_MESSAGE = 96 * 1024 * 1024
 
 APPS = {
     "process": {"port": 5173, "name": "Flux"},
@@ -945,6 +945,7 @@ async def physics_export_print(
     filaments: int | None = None,
     bed_mm: list[float] | None = None,
     margin_mm: float | None = None,
+    filename: str | None = None,
     out_dir: str | None = None,
 ) -> Any:
     payload = compact_dict(
@@ -955,6 +956,7 @@ async def physics_export_print(
         filaments=filaments,
         bedMm=bed_mm,
         marginMm=margin_mm,
+        filename=filename,
         includeFiles=out_dir is not None,
     )
     # Built from the scene graph rather than the canvas, but a scene of
