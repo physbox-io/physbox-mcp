@@ -2593,7 +2593,7 @@ async def physics_paint(
     at: list[Any] | None = None,
     atMm: list[Any] | None = None,
     rgba: list[float] | str | None = None,
-    radius: float = 0.008,
+    radius: float = 8.0,
     radiusMm: float | None = None,
     geomName: str | None = None,
     flow: float = 1.0,
