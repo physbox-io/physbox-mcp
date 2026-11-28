@@ -1,5 +1,5 @@
 """
-PhysBox: MCP - Model Context Protocol Server for Flux, Volt, Mesh, and Etch.
+PhysBox: MCP - Model Context Protocol Server for Volt, Mesh, and Etch.
 Connects LLMs to browser-based simulations via WebSocket relay.
 """
 
@@ -48,13 +48,11 @@ MCP_WS_PORT = int(os.environ.get("MCP_WS_PORT", "3142"))
 WS_MAX_MESSAGE = 96 * 1024 * 1024
 
 APPS = {
-    "process": {"port": 5173, "name": "Flux"},
     "circuit": {"port": 5174, "name": "Volt"},
     "physics": {"port": 5175, "name": "Mesh"},
     "etch":    {"port": 5176, "name": "Etch"},
 }
 
-P  = APPS["process"]["port"]
 C  = APPS["circuit"]["port"]
 Ph = APPS["physics"]["port"]
 Et = APPS["etch"]["port"]
@@ -132,7 +130,6 @@ def _deliver_export(result: Any, out_dir: str | None, extra_keys: tuple[str, ...
     return delivered
 
 physics_docs = load_mcp_docs("physics")
-process_docs = load_mcp_docs("process")
 circuit_docs = load_mcp_docs("circuit")
 etch_docs    = load_mcp_docs("etch")
 cloud_docs   = load_mcp_docs("cloud")
@@ -746,8 +743,8 @@ threading.Thread(target=start_ws_bridge, daemon=True).start()
 mcp = FastMCP(
     "physbox-mcp",
     instructions=(
-        "PhysBox: MCP - Model Context Protocol server for Volt (5174), Mesh (5175), "
-        "Etch (5176), and Flux (Beta) (5173). "
+        "PhysBox: MCP - Model Context Protocol server for Volt (5174), Mesh (5175) "
+        "and Etch (5176). "
         "Call detect_apps first to confirm which apps are running."
     ),
 )
@@ -858,7 +855,7 @@ async def detect_apps() -> list[dict]:
 async def send_command(port: int, cmd: str, payload: dict | None = None) -> Any:
     """
     Send a raw bridge command to an app and return its reply, for what no tool
-    covers. port: 5173 Flux, 5174 Volt, 5175 Mesh, 5176 Etch. cmd is the
+    covers. port: 5174 Volt, 5175 Mesh, 5176 Etch. cmd is the
     bridge's name (e.g. 'GET_SCENE_SUMMARY'), payload its fields in camelCase.
     Mesh, Etch and Volt answer cmd='LIST_COMMANDS' with every command they take; prefer the
     named tool where there is one, since it documents and checks its arguments.
@@ -878,7 +875,7 @@ async def list_sessions() -> Any:
 @mcp.tool(description=get_doc(physics_docs, "use_session", (
     "Pin one browser tab as the target for every subsequent command on that app's port, so work "
     "stays in one tab instead of following whichever tab connected last. port is the app port "
-    "(5173 Flux, 5174 Volt, 5175 Mesh, 5176 Etch); session_id comes from list_sessions. The pin "
+    "(5174 Volt, 5175 Mesh, 5176 Etch); session_id comes from list_sessions. The pin "
     "holds while that tab reloads: commands fail until it is back rather than going to another tab. "
     "An empty session_id unpins. To drive one tab without a pin, pass session on each command."
 )))
@@ -1742,94 +1739,6 @@ async def physics_add_simulation(
         )["files"]
     return result
 
-# ── PhysBox: Flux (Process) Tools ──────────────────────────────────────────────
-
-@mcp.tool(description=get_doc(process_docs, "process_get_state", "Return PhysBox: Flux state"))
-async def process_get_state() -> Any:
-    return await get_conn(P).send("GET_STATE")
-
-@mcp.tool(description=get_doc(process_docs, "process_get_metrics", "Return PhysBox: Flux metrics"))
-async def process_get_metrics() -> Any:
-    return await get_conn(P).send("GET_METRICS")
-
-@mcp.tool(description=get_doc(process_docs, "process_start", "Start simulation"))
-async def process_start() -> Any:
-    return await get_conn(P).send("START_SIM")
-
-@mcp.tool(description=get_doc(process_docs, "process_stop", "Stop simulation"))
-async def process_stop() -> Any:
-    return await get_conn(P).send("STOP_SIM")
-
-@mcp.tool(description=get_doc(process_docs, "process_reset", "Reset simulation"))
-async def process_reset() -> Any:
-    return await get_conn(P).send("RESET_SIM")
-
-@mcp.tool(description=get_doc(process_docs, "process_list_presets", "List Flux presets"))
-async def process_list_presets() -> Any:
-    return await get_conn(P).send("LIST_PRESETS")
-
-@mcp.tool(description=get_doc(process_docs, "process_load_preset", "Load Flux preset"))
-async def process_load_preset(preset: str) -> Any:
-    return await get_conn(P).send("LOAD_PRESET", {"preset": preset})
-
-@mcp.tool(description=get_doc(process_docs, "process_get_library", "Get diagram library"))
-async def process_get_library() -> Any:
-    return await get_conn(P).send("GET_LIBRARY")
-
-@mcp.tool(description=get_doc(process_docs, "process_save_library", "Save current diagram"))
-async def process_save_library(name: str) -> Any:
-    return await get_conn(P).send("SAVE_LIBRARY", {"name": name})
-
-@mcp.tool(description=get_doc(process_docs, "process_set_nodes", "Set canvas nodes"))
-async def process_set_nodes(nodes: list[Any]) -> Any:
-    return await get_conn(P).send("SET_NODES", {"nodes": nodes})
-
-@mcp.tool(description=get_doc(process_docs, "process_set_edges", "Set canvas edges"))
-async def process_set_edges(edges: list[Any]) -> Any:
-    return await get_conn(P).send("SET_EDGES", {"edges": edges})
-
-@mcp.tool(description=get_doc(process_docs, "process_run_headless", "Run headless simulation"))
-async def process_run_headless(ticks: int) -> Any:
-    return await get_conn(P).send("RUN_HEADLESS", {"ticks": ticks}, timeout=30.0)
-
-@mcp.tool(description=get_doc(process_docs, "process_get_history", "Get simulation logs"))
-async def process_get_history() -> Any:
-    return await get_conn(P).send("GET_HISTORY")
-
-@mcp.tool(description=get_doc(process_docs, "process_run_monte_carlo", "Run Monte Carlo simulation"))
-async def process_run_monte_carlo(runs: int = 100, ticks: int = 3600) -> Any:
-    return await get_conn(P).send("RUN_MONTE_CARLO", {"runs": runs, "ticks": ticks}, timeout=60.0)
-
-@mcp.tool(description=get_doc(process_docs, "process_run_optimizer", "Run optimizer sweep"))
-async def process_run_optimizer(
-    targetMetric: str,
-    params: list[Any],
-    mode: str = "maximize",
-    ticks: int = 1200,
-    strategy: str = "grid_sweep",
-    populationSize: int = 12,
-    generations: int = 6,
-    mutationRate: float = 0.25,
-) -> Any:
-    return await get_conn(P).send(
-        "RUN_OPTIMIZER",
-        {
-            "targetMetric": targetMetric,
-            "mode": mode,
-            "ticks": ticks,
-            "params": params,
-            "strategy": strategy,
-            "populationSize": populationSize,
-            "generations": generations,
-            "mutationRate": mutationRate,
-        },
-        timeout=60.0
-    )
-
-@mcp.tool(description=get_doc(process_docs, "process_get_schema", "Return PhysBox: Flux schema"))
-async def process_get_schema() -> Any:
-    return get_reference_docs(process_docs)
-
 # ── PhysBox: Volt (Circuit) Tools ─────────────────────────────────────────────
 
 @mcp.tool(description=get_doc(circuit_docs, "circuit_get_state", "Return PhysBox: Volt state"))
@@ -2578,7 +2487,7 @@ async def physics_get_screenshot(
 ) -> Any:
     result = await get_conn(Ph).send("SCREENSHOT", compact_dict(
         showColliders=show_colliders, showEdges=show_edges, wireframe=wireframe, clean=clean, scale=scale,
-        render=render, renderSamples=render_samples), timeout=90.0 if render else 30.0)
+        render=render, renderSamples=render_samples), timeout=90.0 if render else 60.0)
     if not isinstance(result, dict) or not result.get("ok"):
         error = result.get("error") if isinstance(result, dict) else "Unknown error"
         raise RuntimeError(f"Screenshot failed: {error}")
