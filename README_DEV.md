@@ -10,7 +10,7 @@ Browsers can only run as WebSocket clients, not servers. The companion server ac
 1. It hosts an MCP server (via stdio or HTTP).
 2. It hosts a WebSocket relay server on port `3142`.
 3. When the user opens a PhysBox web application (e.g., PhysBox: Mesh) in their browser, the web application connects to the WebSocket relay.
-4. When an AI Assistant (e.g., Claude, Antigravity) executes an MCP tool, the command is forwarded over the WebSocket connection to the browser tab, which processes the physics/circuit/process simulation and returns the results back through the relay.
+4. When an AI Assistant (e.g., Claude, Antigravity) executes an MCP tool, the command is forwarded over the WebSocket connection to the browser tab, which processes the physics/circuit simulation and returns the results back through the relay.
 
 ### Multi-Client Peer Relay & Failover
 To allow multiple AI assistants (e.g., Claude Desktop/CLI and Antigravity) to run simultaneously without port conflicts or forced restarts:
@@ -22,7 +22,6 @@ To allow multiple AI assistants (e.g., Claude Desktop/CLI and Antigravity) to ru
 Primary MCP Client (e.g. Claude)
   └── spawns → physbox-mcp (stdio) [Primary Hub]
                  ├── WebSocket Server (ws://localhost:3142)
-                 │              ├── Flux (Port 5173)
                  │              ├── Volt (Port 5174)
                  │              └── Mesh (Port 5175)
                  └── Peer WS Connection
@@ -39,7 +38,6 @@ Secondary MCP Client (e.g. Antigravity)
 The full workspace is structured with the following sibling repositories:
 *   `~/physics` — PhysBox: Mesh rigid-body physics simulator app (MuJoCo WASM).
 *   `~/circuit` — PhysBox: Volt SPICE circuit simulator app (NgSpice WASM).
-*   `~/process` — PhysBox: Flux (Beta) discrete-event / system-dynamics simulation app.
 *   `~/physbox_mcp` — This repository (the companion MCP bridge).
 
 ### 2. Installing Dependencies
@@ -64,7 +62,6 @@ Each simulation app defines its own authoritative schemas and scripting APIs in 
 Since users should be able to run `physbox-mcp` standalone (without cloning the entire simulation codebases), fallback copies of these schema JSON files are committed to this repository:
 *   `physbox_mcp/mcp-docs/physics.json` (synced from `~/physics/mcp-docs.json`)
 *   `physbox_mcp/mcp-docs/circuit.json` (synced from `~/circuit/mcp-docs.json`)
-*   `physbox_mcp/mcp-docs/process.json` (synced from `~/process/mcp-docs.json`)
 
 **Important:** When editing or adding tools inside any of the simulation apps, you must copy their updated `mcp-docs.json` into the `physbox_mcp/mcp-docs/` folder here so the MCP server reflects the updated schemas.
 

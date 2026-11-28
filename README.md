@@ -7,7 +7,6 @@ PhysBox: MCP is a Model Context Protocol (MCP) server that enables LLMs and MCP 
 | **Volt** | [volt.physbox.io](https://volt.physbox.io) | SPICE circuit simulation (powered by NgSpice WASM in browser) |
 | **Mesh** | [mesh.physbox.io](https://mesh.physbox.io) | Rigid-body physics simulation & OpenSCAD parametric CAD (powered by MuJoCo WASM) |
 | **Etch** | [etch.physbox.io](https://etch.physbox.io) | 2D vector studio, CNC toolpathing & WebSerial GRBL controller |
-| **Flux** (Coming Soon) | [flux.physbox.io](https://flux.physbox.io) | Discrete-event / system-dynamics simulation |
 
 All communication is handled via JSON over WebSockets directly to the web app in your browser—no browser automation or DOM scraping is needed.
 
@@ -43,7 +42,6 @@ When you open any of the simulation web apps, they connect directly to this WebS
 MCP Client (e.g. Claude Desktop)
   └── spawns → physbox-mcp (stdio)
                  └── WebSocket Server (ws://localhost:3142)
-                                ├── Flux
                                 ├── Volt
                                 ├── Mesh
                                 └── Etch
@@ -65,7 +63,6 @@ pip install physbox-mcp
 
 ### 1. Open the Web Applications
 Launch or access the simulation web applications in your web browser:
-*   **Flux:** [flux.physbox.io](https://flux.physbox.io)
 *   **Volt:** [volt.physbox.io](https://volt.physbox.io)
 *   **Mesh:** [mesh.physbox.io](https://mesh.physbox.io)
 *   **Etch:** [etch.physbox.io](https://etch.physbox.io)

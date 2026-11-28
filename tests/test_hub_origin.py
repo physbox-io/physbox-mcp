@@ -8,14 +8,12 @@ from physbox_mcp.origin import origin_allowed, refuse_foreign_origin
 
 @pytest.mark.parametrize("origin", [
     "http://localhost:5175",
-    "http://localhost:5173",
     "https://localhost:5176",
     "http://localhost",
     "http://127.0.0.1:5174",
     "https://mesh.physbox.io",
     "https://etch.physbox.io",
     "https://volt.physbox.io",
-    "https://flux.physbox.io",
 ])
 def test_the_apps_may_connect(origin):
     assert origin_allowed([origin])

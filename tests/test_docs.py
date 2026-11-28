@@ -29,7 +29,6 @@ BUNDLED = ROOT / "physbox_mcp" / "mcp-docs"
 # variable is loaded from.
 APPS = {
     "physics_docs": "physics",
-    "process_docs": "process",
     "circuit_docs": "circuit",
     "etch_docs": "etch",
 }
@@ -95,7 +94,7 @@ def test_no_documentation_for_tools_that_do_not_exist(docs_var, app_id):
     "app_id,repo",
     # The MCP's app id is not always the repo's name: Mesh's tools are all
     # `physics_*` and Volt's are all `circuit_*`.
-    [("etch", "etch"), ("physics", "mesh"), ("circuit", "volt"), ("process", "process")],
+    [("etch", "etch"), ("physics", "mesh"), ("circuit", "volt")],
 )
 def test_bundled_copy_matches_the_app_when_it_is_checked_out(app_id, repo):
     """
